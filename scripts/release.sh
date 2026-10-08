@@ -13,8 +13,9 @@
 # every release carries its own appcast.xml, and GitHub's "latest" redirect
 # points Sparkle at the newest one.
 #
-# Needs a Developer ID Application certificate, a notarytool keychain profile
-# NOTARY_PROFILE (default "weidhaus"), gh logged in, and Sparkle's EdDSA private
+# Needs a Developer ID Application certificate, notarization credentials (an App
+# Store Connect API key via ASC_KEY_PATH/ASC_KEY_ID/ASC_ISSUER_ID, or a notarytool
+# keychain profile NOTARY_PROFILE, default "weidhaus"), gh logged in, and Sparkle's EdDSA private
 # key in the login keychain (generate_appcast signs with it and may ask first).
 #
 set -euo pipefail
@@ -86,8 +87,18 @@ check "tag $TAG unused here" "a version is released once; pick the next" tag_fre
 check "tag $TAG unused on origin" "a version is released once; pick the next (or origin is unreachable)" tag_free_on_origin
 check "gh logged in, $REPO reachable" "gh auth login" gh repo view "$REPO"
 check "$REPO is public" "make it public; installed copies cannot read a private feed" repo_public
-check "notarytool profile \"$PROFILE\" works" "xcrun notarytool store-credentials $PROFILE --apple-id <id> --team-id <team>" \
-    xcrun notarytool history --keychain-profile "$PROFILE"
+# Notarization signs in with the App Store Connect API key when one is given
+# (the same ASC_* variables scripts/ios-release.sh uses), else with a
+# notarytool keychain profile.
+if [[ -n "${ASC_KEY_PATH:-}" && -n "${ASC_KEY_ID:-}" && -n "${ASC_ISSUER_ID:-}" ]]; then
+    NOTARY_AUTH=(--key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+    NOTARY_DESC="App Store Connect API key $ASC_KEY_ID"
+else
+    NOTARY_AUTH=(--keychain-profile "$PROFILE")
+    NOTARY_DESC="keychain profile \"$PROFILE\""
+fi
+check "notarytool signs in ($NOTARY_DESC)" "set ASC_KEY_PATH/ASC_KEY_ID/ASC_ISSUER_ID, or: xcrun notarytool store-credentials $PROFILE" \
+    xcrun notarytool history "${NOTARY_AUTH[@]}"
 check "generate_appcast present" "swift package resolve" test -x "$GENERATE_APPCAST"
 
 # Same lookup as build-app.sh, which signs the app with this identity. Needed
@@ -129,18 +140,18 @@ fi
 
 # 4. Notarize, staple, verify --------------------------------------------------
 
-bold "→ notarizing with keychain profile \"$PROFILE\" (waits on Apple, usually minutes)"
+bold "→ notarizing with $NOTARY_DESC (waits on Apple, usually minutes)"
 # `submit --wait` exits 0 even when Apple rejects the image: the submission
 # worked, the verdict was Invalid. Only the verdict counts, and Apple's log
 # says why. `|| true`: if it does exit non-zero, the verdict check below still
 # runs and fetches the log instead of set -e ending the script mid-air.
-NOTARY_JSON="$(xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait --output-format json || true)"
+NOTARY_JSON="$(xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait --output-format json || true)"
 NOTARY_ID="$(plutil -extract id raw -o - - <<<"$NOTARY_JSON" 2>/dev/null || true)"
 NOTARY_STATUS="$(plutil -extract status raw -o - - <<<"$NOTARY_JSON" 2>/dev/null || true)"
 if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
     warn "$NOTARY_JSON"
     if [[ -n "$NOTARY_ID" ]]; then
-        xcrun notarytool log "$NOTARY_ID" --keychain-profile "$PROFILE" >&2 || true
+        xcrun notarytool log "$NOTARY_ID" "${NOTARY_AUTH[@]}" >&2 || true
     fi
     die "notarization: ${NOTARY_STATUS:-no verdict}. Nothing was published."
 fi

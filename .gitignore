@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+dist/
+*.xcodeproj
+!iOS/Chronato.xcodeproj
+xcuserdata/
+.DS_Store
+.claude/

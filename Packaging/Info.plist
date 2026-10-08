@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: scripts/build-app.sh replaces __VERSION__ and __BUILD__. -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.weidhaus.chronato</string>
+	<key>CFBundleName</key>
+	<string>Chronato</string>
+	<key>CFBundleDisplayName</key>
+	<string>Chronato</string>
+	<key>CFBundleExecutable</key>
+	<string>Chronato</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<!-- Plain http only to this Mac (a local Kimai); KimaiConnection refuses it elsewhere. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 weidhaus · MIT</string>
+	<!-- Sparkle. Each GitHub release carries its appcast.xml; "latest" redirects to the newest. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/weidhaus/Chronato/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>ZuERCJRtOHNR5I6hBPDQNaJ4yRJeqMMcFw6cTqiZ7qU=</string>
+	<!-- Check daily without asking first; Settings → About turns it off. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+</dict>
+</plist>

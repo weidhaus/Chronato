@@ -55,7 +55,7 @@ enum Snapshot {
             }
 
             for tab in SettingsTab.allCases {
-                render(SettingsView(tab: tab).environment(TrackerStore.preview(.idle)), appearance: appearance,
+                render(SettingsWindowController.makeWindow(store: TrackerStore.preview(.idle), tab: tab), appearance: appearance,
                        to: dir.appendingPathComponent("settings-\(tab.rawValue)-\(name).png"))
             }
             renderWindow(ReportsView(fixture: ReportsView.fixtureEntries()).environment(TrackerStore.preview(.idle)),
@@ -110,6 +110,20 @@ enum Snapshot {
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    /// A whole window, title bar and toolbar included, never put on screen.
+    @MainActor static func render(_ window: NSWindow, appearance: NSAppearance.Name, to url: URL) {
+        window.appearance = NSAppearance(named: appearance)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        // The selected toolbar item's glass draws as a white block off screen;
+        // the window title names the tab instead.
+        window.toolbar?.selectedItemIdentifier = nil
+        guard let frame = window.contentView?.superview,
+              let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
+        frame.cacheDisplay(in: frame.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        print("\(url.lastPathComponent): \(window.title), \(Int(window.frame.width))×\(Int(window.frame.height))")
     }
 }
 

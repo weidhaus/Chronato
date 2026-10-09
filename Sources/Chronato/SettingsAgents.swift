@@ -334,10 +334,12 @@ struct AgentTokenView: View {
     }
 
     private func copy(_ text: String, as message: String) {
+        // A plain copy, deliberately without the nspasteboard.org "concealed"
+        // marker: clipboard managers such as Maccy skip marked items entirely,
+        // so the token never reached the user's clipboard history and Copy
+        // looked broken. The token is local-only and revocable (New Token…).
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        // Both carry the token: ask clipboard managers (nspasteboard.org convention) not to keep it in their history.
-        NSPasteboard.general.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
         copied = message
     }
 }

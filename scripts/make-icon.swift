@@ -6,8 +6,8 @@
 // Writes into <dir>:
 //   AppIcon.icns            every macOS iconset size (the fallback beside the Icon Composer icon)
 //   logo-1024.png           that macOS icon at 1024 px, for presentations and the README
-//   AppIcon-iOS-1024.png    the iPhone icon: full bleed, no alpha. Copy it to
-//                           iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+//   AppIcon-iOS-1024.png    the iPhone icon drawn flat: full bleed, no alpha. A 264 px copy is
+//                           iOS/App/Assets.xcassets/Brandmark.imageset/Brandmark.png
 //   mark.svg, logo.svg      the flat mark: one colour (currentColor), and in two colours for web pages
 //   Chronato.icon/Assets/   arc.svg and dot.svg, the Icon Composer layers (icon.json is edited by hand
 //                           or in Icon Composer; this script never touches it)

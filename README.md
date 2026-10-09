@@ -10,7 +10,7 @@
 
 **Mac (menu bar)**
 
-- **Start, pause, stop** from the menu bar: pick customer → project → activity and add a note.
+- **Start, pause, stop** from a native menu-bar menu: **Start ▸** customer ▸ project ▸ activity, or **New Timer…** (⌘N) to search every combination and add a note up front. Pause ⌘P, Stop ⌘S, Add Note… ⌘E.
 - **Live time in the menu bar**, optionally with the customer name.
 - **Recent activities**: start an earlier customer/project/activity/note again with one click.
 - **Server sync**: a timer started in the Kimai web UI, on the iPhone or on another Mac shows up in Chronato, and the other way round.
@@ -19,7 +19,7 @@
 - **Global shortcut ⌃⌥⌘T**: pause or resume, or start the most recent activity.
 - **Reports**: your hours per customer, then project and activity, by day, week, month or year, split into Me / AI.
 - **AI agents via MCP**: coding agents on an allowlist book their own time, each with its own token, as a separate Kimai user tagged `ai-<agent>`.
-- **Launch at login** and **automatic updates** (Sparkle, EdDSA-signed).
+- **Launch at login**, **automatic updates** (Sparkle, EdDSA-signed) and a **Light / Dark / Match System** appearance.
 
 **iPhone** (source in [iOS/](iOS/README.md), currently in TestFlight)
 

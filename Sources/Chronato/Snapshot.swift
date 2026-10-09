@@ -55,7 +55,7 @@ enum Snapshot {
             }
 
             for tab in SettingsTab.allCases {
-                render(SettingsWindowController.makeWindow(store: TrackerStore.preview(.idle), tab: tab), appearance: appearance,
+                render(SettingsWindow.make(store: TrackerStore.preview(.idle), tab: tab), appearance: appearance,
                        to: dir.appendingPathComponent("settings-\(tab.rawValue)-\(name).png"))
             }
             renderWindow(ReportsView(fixture: ReportsView.fixtureEntries()).environment(TrackerStore.preview(.idle)),

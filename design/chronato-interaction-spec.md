@@ -145,8 +145,7 @@ E   New Timer…                                    ⌘N      plus
 G   Show Reports                                  ⌘R      chart.bar.xaxis
 G   Open Kimai                                            arrow.up.forward.app
 ────────
-H   Check for Updates…                                    arrow.triangle.2.circlepath
-      or, when Sparkle found one: Update to 1.2.0 — Install…   arrow.down.circle
+[H  Update to 1.2.0 — Install…                            arrow.down.circle, only when Sparkle found one]
 H   Settings…                                     ⌘,      gearshape
 ────────
 I   Quit Chronato                                 ⌘Q      power
@@ -169,7 +168,7 @@ Blocks not named for a state are as in the skeleton. Times are examples.
 | Away ≥ 24 h (`.tooLong`) | as Away | B adds "More than a day away is not counted" | no Count item | |
 | **Pending auto-stop while offline** (`store.pendingStopAt`) | running glyph, title frozen | A: offline lines. B: "Running since 13:02 · 1:18:00" (frozen), then "Ends at 14:20 once Kimai is reachable" | as Running, disabled while offline; once online Pause/Stop apply the pending end (store contract) | |
 | **AI agent sessions present** | unchanged (AI time is not yours) | — | — | F: section **AI Agents**; one item per session (§4.7) |
-| **Update available** | unchanged | — | — | H: **Update to 1.2.0 — Install…** replaces Check for Updates… |
+| **Update available** | unchanged | — | — | H: **Update to 1.2.0 — Install…** above Settings…. Without an update the menu has no update item, as in HoldFn and Meetfacts ("an update is news"); **Check for Updates…** is in Settings → About |
 | **Last error** (`store.lastError`) | unchanged | A first: the error (§4.8) | — | — |
 | **Busy** (a change in flight) | unchanged | — | disabled | D, E disabled |
 
@@ -293,7 +292,7 @@ Opening a SwiftUI `Settings` or `Window` scene from AppKit has no public API (`s
 
 - Native toolbar tabs: **General** (`gearshape`), **Connection** (`network`), **AI Agents** (`sparkles`), **About** (`info.circle`). The window title follows the tab; 560 pt wide, height fits the tab (AppKit animates the change); not resizable.
 - Panes keep their grouped forms (`.formStyle(.grouped)`) on the system's form backgrounds — this is System Settings' look, not a Studio surface — with `.tint(Studio.accentInk)`. Errors in `errorInk` with symbol; warnings an orange symbol with ordinary text (§2).
-- **General**, in this order: *Startup* (Open at login, approval row); *Tracking* (Auto-pause when idle, Global shortcut ⌃⌥⌘T, Show customer name in the menu bar, the 24 h footer); *Appearance* — a pop-up picker labelled "Appearance" with **System**, **Light**, **Dark** (`AppearanceMode.allCases`, `label`), bound to `@AppStorage(Prefs.appearance)`, default `system`. Changing it applies at once to every Chronato window, panel and menu: `AppearanceMode.follow()`, called at launch, observes the pref and sets `NSApp.appearance`. Nothing else to call.
+- **General**, in this order: *Startup* (Open at login, approval row); *Tracking* (Auto-pause when idle, Global shortcut ⌃⌥⌘T, Show customer name in the menu bar, the 24 h footer); *Appearance* — a pop-up picker labelled "Appearance" with **Match System**, **Light**, **Dark** and their symbols (`AppearanceMode.allCases`, `label`, `symbol`: Meetfacts' and HoldFn's words and symbols), bound to `@AppStorage(Prefs.appearance)`, default `system`. Changing it applies at once to every Chronato window, panel and menu: `AppearanceMode.follow()`, called at launch, observes the pref and sets `NSApp.appearance`. Nothing else to call.
 - **Connection** and **AI Agents** unchanged in behaviour.
 - **About:** the flat mark (§2) at 96 pt, "Chronato" 24 semibold, "Version x" 13 `textSecondary`, the existing tagline, link, update controls and licence lines (12 `textSecondary`).
 
@@ -346,9 +345,9 @@ Accepted when:
 
 - `Sources/Chronato/Studio.swift` — tokens, `AppearanceMode` (done).
 - `Sources/Chronato/TrackerStore.swift` — `Prefs.appearance` (done). Store API unchanged; preview states grow for §12.
-- `Sources/Chronato/ChronatoApp.swift` — `AppearanceMode.follow()` at launch (done); the status item and controller replace the `MenuBarExtra` scene.
+- `Sources/Chronato/ChronatoApp.swift` — `AppearanceMode.follow()` at launch (done); the status item and controller replace the `MenuBarExtra` scene; `AppWindows` opens Reports and Settings (`SettingsWindow.make`) and owns the activation policy (§7).
 - `Sources/Chronato/MenuBarController.swift` (new) — status item, menu, delegate; takes `EntryNames`, `sinceText`, `minutes()`, `startableCustomers` and `MenuBarLabel.compose`'s pause badge from `MenuPanel.swift`, which goes away.
 - `Sources/Chronato/NotePanel.swift`, `NewTimerPanel.swift` (new) — §5, §6.
-- `Sources/Chronato/ReportsView.swift` — §8. `SettingsView.swift`, `SettingsAgents.swift` — §9. `Updater.swift` — the menu item replaces `UpdateReminderButton` and `CheckForUpdatesButton`.
+- `Sources/Chronato/ReportsView.swift` — §8. `SettingsView.swift`, `SettingsAgents.swift` — §9. `Updater.swift` — the menu's update item replaces `UpdateReminderButton`; Check for Updates… stays in About (`UpdateSettings`).
 - `Sources/Chronato/Snapshot.swift` — §12 renders and menu dumps.
 - `Sources/Chronato/Brand.swift` — `Brand.accent` forwards to `Studio.accentFill`; the flat mark for About is drawn from `Branding/brand.md`'s construction.

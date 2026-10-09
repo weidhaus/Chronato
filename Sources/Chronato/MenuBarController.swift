@@ -400,16 +400,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         ]
     }
 
-    /// H: updates and Settings.
+    /// H: an update Sparkle found, and Settings. As in HoldFn and Meetfacts, the
+    /// menu names an update only once there is one; Check for Updates… is in
+    /// Settings → About.
     private func appBlock() -> [NSMenuItem] {
-        let update = if let version = availableUpdate() {
-            command("Update to \(version) — Install…", symbol: "arrow.down.circle") { Updater.shared.checkForUpdates() }
-        } else {
-            command("Check for Updates…", symbol: "arrow.triangle.2.circlepath", enabled: Updater.shared.canCheckForUpdates) {
-                Updater.shared.checkForUpdates()
-            }
-        }
-        return [update, command("Settings…", symbol: "gearshape", key: ",") { AppWindows.shared.showSettings() }]
+        let settings = command("Settings…", symbol: "gearshape", key: ",") { AppWindows.shared.showSettings() }
+        guard let version = availableUpdate() else { return [settings] }
+        return [command("Update to \(version) — Install…", symbol: "arrow.down.circle") { Updater.shared.checkForUpdates() }, settings]
     }
 
     // MARK: Items

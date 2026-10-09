@@ -3,9 +3,8 @@ import ChronatoCore
 import ServiceManagement
 import SwiftUI
 
-enum SettingsTab: String, CaseIterable, Identifiable {
+enum SettingsTab: String, CaseIterable {
     case general, connection, agents, about
-    var id: String { rawValue }
 
     var title: String {
         switch self {
@@ -55,42 +54,15 @@ struct SettingsPane: View {
 // MARK: - Window
 
 /// The Settings window, in AppKit so the status-item menu can open it: a
-/// SwiftUI Settings scene has no public opener since macOS 14.
+/// SwiftUI Settings scene has no public opener since macOS 14. AppWindows
+/// shows it (and owns the activation policy); snapshots render it as built.
 @MainActor
-final class SettingsWindowController: NSObject, NSWindowDelegate {
-    static let shared = SettingsWindowController()
-    private var window: NSWindow?
-
-    /// Brings the window forward, on `tab` if given. Chronato is a regular app
-    /// (Dock tile, ⌘-Tab, menu bar with Edit menu) while the window is open.
-    func show(_ tab: SettingsTab? = nil) {
-        let window = self.window ?? Self.makeWindow(store: .shared)
-        if self.window == nil {
-            self.window = window
-            window.delegate = self
-            window.setFrameAutosaveName("Settings")
-            if !window.setFrameUsingName("Settings") { window.center() }
-        }
-        if let tab { (window.contentViewController as? NSTabViewController)?.selectedTabViewItemIndex = tab.index }
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        // Back to the menu bar only, unless another window (Reports) is still open.
-        let closing = notification.object as? NSWindow
-        let othersOpen = NSApp.windows.contains {
-            $0 !== closing && $0.isVisible && $0.styleMask.contains(.titled) && !($0 is NSPanel)
-        }
-        if !othersOpen { NSApp.setActivationPolicy(.accessory) }
-    }
-
-    /// Built, not shown; snapshots render it as is. NSTabViewController puts
-    /// the tabs in the toolbar, titles the window after the tab, and fits the
-    /// window to the tab's preferred size with the top edge kept, also when a
-    /// pane grows (an error line, another agent) or a saved frame is stale.
-    static func makeWindow(store: TrackerStore, tab: SettingsTab = .general) -> NSWindow {
+enum SettingsWindow {
+    /// NSTabViewController puts the tabs in the toolbar, titles the window
+    /// after the tab, and fits the window to the tab's preferred size with the
+    /// top edge kept, also when a pane grows (an error line, another agent) or
+    /// a saved frame is stale.
+    static func make(store: TrackerStore, tab: SettingsTab = .general) -> NSWindow {
         let tabs = NSTabViewController()
         tabs.tabStyle = .toolbar
         for pane in SettingsTab.allCases {
@@ -108,35 +80,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         return window
-    }
-}
-
-/// The SwiftUI Settings scene's content, which the MenuBarExtra panel opens;
-/// it goes with the panel once the status-item menu opens the window above.
-struct SettingsView: View {
-    @Environment(TrackerStore.self) private var store
-    @State var tab: SettingsTab = .general
-    /// Set by the menu to deep-link a tab (e.g. Connection); consumed and cleared here.
-    /// Observed, not just read on appear, because the window may already be open.
-    @AppStorage(Prefs.settingsTab) private var requestedTab: String?
-
-    var body: some View {
-        TabView(selection: $tab) {
-            ForEach(SettingsTab.allCases) { tab in
-                SettingsPane(tab: tab)
-                    .tabItem { Label(tab.title, systemImage: tab.symbol) }
-                    .tag(tab)
-            }
-        }
-        .onAppear(perform: openRequestedTab)
-        .onChange(of: requestedTab) { openRequestedTab() }
-    }
-
-    private func openRequestedTab() {
-        // Snapshots render the tab they were given.
-        guard !store.isPreview, let raw = requestedTab else { return }
-        if let requested = SettingsTab(rawValue: raw) { tab = requested }
-        requestedTab = nil
     }
 }
 
@@ -236,7 +179,7 @@ private struct GeneralSettings: View {
             }
             Section {
                 Picker("Appearance", selection: $appearance) {
-                    ForEach(AppearanceMode.allCases) { Text($0.label).tag($0) }
+                    ForEach(AppearanceMode.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
                 }
             }
         }

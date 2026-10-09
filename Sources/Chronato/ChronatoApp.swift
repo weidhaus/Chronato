@@ -38,7 +38,15 @@ final class AppWindows: NSObject, NSWindowDelegate {
 
     func showReports() {
         let window = reports ?? {
-            let window = makeWindow(ReportsView(), title: "Chronato Reports", resizable: true)
+            let host = NSHostingController(rootView: ReportsView().environment(TrackerStore.shared))
+            // The SwiftUI .toolbar becomes the window's NSToolbar; never below the content's minimum.
+            host.sceneBridgingOptions = [.toolbars, .title]
+            host.sizingOptions = [.minSize]
+            let window = NSWindow(contentViewController: host)
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.title = "Chronato Reports"
+            window.isReleasedWhenClosed = false
+            window.delegate = self
             // The period title is in the content, once (§8).
             window.titleVisibility = .hidden
             window.setContentSize(NSSize(width: 960, height: 680))
@@ -51,24 +59,14 @@ final class AppWindows: NSObject, NSWindowDelegate {
 
     /// `tab`: open on that tab (Connect to Kimai… → Connection).
     func showSettings(tab: SettingsTab? = nil) {
-        if let tab { UserDefaults.standard.set(tab.rawValue, forKey: Prefs.settingsTab) }
-        let window = settings ?? autosaved(makeWindow(SettingsView(), title: "Settings", resizable: false), as: "Settings")
+        let window = settings ?? {
+            let window = SettingsWindow.make(store: .shared)
+            window.delegate = self
+            return autosaved(window, as: "Settings")
+        }()
         settings = window
+        if let tab { (window.contentViewController as? NSTabViewController)?.selectedTabViewItemIndex = tab.index }
         present(window)
-    }
-
-    private func makeWindow(_ view: some View, title: String, resizable: Bool) -> NSWindow {
-        let host = NSHostingController(rootView: view.environment(TrackerStore.shared))
-        // A SwiftUI .toolbar becomes the window's NSToolbar; .navigationTitle its title.
-        host.sceneBridgingOptions = [.toolbars, .title]
-        // Resizable: never below the content's minimum. Else the default: the window fits the content.
-        if resizable { host.sizingOptions = [.minSize] }
-        let window = NSWindow(contentViewController: host)
-        window.styleMask = resizable ? [.titled, .closable, .miniaturizable, .resizable] : [.titled, .closable, .miniaturizable]
-        window.title = title
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        return window
     }
 
     /// The saved frame, else centred; saved from now on.

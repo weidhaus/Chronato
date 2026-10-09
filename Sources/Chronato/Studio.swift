@@ -110,11 +110,20 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Meetfacts' and HoldFn's words and symbols.
     var label: String {
         switch self {
-        case .system: "System"
+        case .system: "Match System"
         case .light: "Light"
         case .dark: "Dark"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .system: "circle.lefthalf.filled"
+        case .light: "sun.max"
+        case .dark: "moon"
         }
     }
 

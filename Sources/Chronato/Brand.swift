@@ -62,7 +62,7 @@ enum Brand {
     }
 }
 
-/// "1:05" (h:mm) for the menu bar, "1:05:09" with seconds for the panel.
+/// "1:05" (h:mm) for the menu bar, "1:05:09" with seconds for the menu's running line.
 enum DurationText {
     static func short(_ seconds: Int) -> String {
         let s = max(0, seconds)

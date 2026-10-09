@@ -5,16 +5,31 @@
 #
 #   developer_id < <(security find-identity -v -p codesigning)
 #
-# reads find-identity's output and prints "<SHA-1> <name>" of the one valid
-# "Developer ID Application: … (5SB3S8ESR3)" identity, or nothing when there is
-# none. The same certificate in two keychains counts once (the caller signs by
-# SHA-1, which a duplicate name cannot make ambiguous). Several distinct ones
-# (say, a renewal or a new name) fail with the list, unless DEVELOPER_ID_SHA1
-# names one of them.
+# reads find-identity's output and prints "<SHA-1> <name>" of the valid
+# "Developer ID Application: … (5SB3S8ESR3)" identity to sign with, or nothing
+# when there is none. The same certificate in two keychains counts once (the
+# caller signs by SHA-1, which a duplicate name cannot make ambiguous). Several
+# distinct ones (a renewal, a new name) are all this team's, so the NEWEST
+# certificate (latest notBefore) wins and the choice is printed on stderr;
+# DEVELOPER_ID_SHA1 overrides. If their dates cannot be told apart, it stops
+# with the list rather than guess.
 #
 #   scripts/lib/identity.sh --selftest   checks the rule against sample output
 
 TEAM_ID="5SB3S8ESR3"
+
+# notBefore of the keychain certificate with this SHA-1, in epoch seconds
+# (0 when it cannot be read). A function so the selftest can stand in for it.
+cert_start() {
+    local pem start
+    pem="$(security find-certificate -a -Z -p 2>/dev/null | awk -v want="$1" '
+        /^SHA-1 hash:/ { take = ($3 == want); next }
+        take && /-----BEGIN CERTIFICATE-----/ { out = 1 }
+        take && out { print }
+        take && /-----END CERTIFICATE-----/ { exit }')"
+    start="$(openssl x509 -noout -startdate <<<"$pem" 2>/dev/null | sed 's/^notBefore=//')"
+    [[ -n "$start" ]] && LC_ALL=C date -j -u -f "%b %d %T %Y %Z" "$start" +%s 2>/dev/null || echo 0
+}
 
 developer_id() {
     local candidates want
@@ -30,9 +45,22 @@ developer_id() {
         return 1
     fi
     if [[ "$candidates" == *$'\n'* ]]; then
-        printf '\033[31m✗ several Developer ID Application identities of team %s; set DEVELOPER_ID_SHA1 to the one to sign with:\033[0m\n%s\n' \
-            "$TEAM_ID" "$(sed 's/^/    /' <<<"$candidates")" >&2
-        return 1
+        local sha rest start best="" best_start=0 tie=0
+        while read -r sha rest; do
+            start="$(cert_start "$sha")"
+            (( start > 0 )) || tie=1   # an unreadable date might be the newest
+            if (( start > best_start )); then best="$sha $rest"; best_start=$start
+            elif (( start == best_start )); then tie=1; fi
+        done <<<"$candidates"
+        if [[ -z "$best" || $tie == 1 ]]; then
+            printf '\033[31m✗ several Developer ID Application identities of team %s and their dates do not tell them apart; set DEVELOPER_ID_SHA1:\033[0m\n%s\n' \
+                "$TEAM_ID" "$(sed 's/^/    /' <<<"$candidates")" >&2
+            return 1
+        fi
+        printf '  using the newest of %s Developer ID identities: %s (set DEVELOPER_ID_SHA1 to choose another)\n' \
+            "$(wc -l <<<"$candidates" | tr -d ' ')" "${best#* }" >&2
+        echo "$best"
+        return 0
     fi
     [[ -z "$candidates" ]] || echo "$candidates"
 }
@@ -51,6 +79,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   6) 4444444444444444444444444444444444444444 \"Developer ID Application: Revoked (5SB3S8ESR3)\" (CSSMERR_TP_CERT_REVOKED)
   7) 5555555555555555555555555555555555555555 \"Developer ID Application: Evil (5SB3S8ESR3) (ABCDE12345)\"
      7 valid identities found"
+    cert_start() { case "$1" in "$A") echo 1789912963 ;; "$B") echo 1791533783 ;; *) echo 0 ;; esac; }
     FAILS=0
     expect() { # expect <case> <wanted stdout> <wanted status> <find-identity output>
         local out rc=0
@@ -65,9 +94,16 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     expect "duplicate counts once" "$A Developer ID Application: Old Name (5SB3S8ESR3)" 0 "$LINE_A
 $LINE_A2
 $OTHERS"
-    expect "two distinct stop" "" 1 "$LINE_A
+    expect "two distinct: the newest wins" "$B Developer ID Application: New Name (5SB3S8ESR3)" 0 "$LINE_A
 $LINE_A2
 $LINE_B
+$OTHERS"
+    expect "order does not matter" "$B Developer ID Application: New Name (5SB3S8ESR3)" 0 "$LINE_B
+$LINE_A
+$OTHERS"
+    C="6666666666666666666666666666666666666666"
+    expect "dates that do not tell them apart stop" "" 1 "$LINE_A
+  8) $C \"Developer ID Application: Unknown Date (5SB3S8ESR3)\"
 $OTHERS"
     DEVELOPER_ID_SHA1="$(tr A-F a-f <<<"$B")" \
         expect "DEVELOPER_ID_SHA1 picks one (any case)" "$B Developer ID Application: New Name (5SB3S8ESR3)" 0 "$LINE_A

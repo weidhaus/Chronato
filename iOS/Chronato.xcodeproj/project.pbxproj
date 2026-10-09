@@ -10,6 +10,7 @@
 		C4A700000000000000000019 /* ChronatoCore in Frameworks */ = {isa = PBXBuildFile; productRef = C4A70000000000000000001F /* ChronatoCore */; };
 		C4A70000000000000000001A /* ChronatoCore in Frameworks */ = {isa = PBXBuildFile; productRef = C4A700000000000000000020 /* ChronatoCore */; };
 		C4A70000000000000000001B /* ChronatoWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C4A700000000000000000005 /* ChronatoWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C4A70000000000000000002B /* Chronato.icon in Resources */ = {isa = PBXBuildFile; fileRef = C4A70000000000000000002A /* Chronato.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +40,7 @@
 /* Begin PBXFileReference section */
 		C4A700000000000000000004 /* Chronato.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Chronato.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4A700000000000000000005 /* ChronatoWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ChronatoWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C4A70000000000000000002A /* Chronato.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = Chronato.icon; path = ../Branding/Chronato.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -91,6 +93,7 @@
 				C4A700000000000000000007 /* Shared */,
 				C4A700000000000000000008 /* Widgets */,
 				C4A700000000000000000009 /* Config */,
+				C4A70000000000000000002A /* Chronato.icon */,
 				C4A700000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -203,6 +206,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4A70000000000000000002B /* Chronato.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,7 +317,7 @@
 		C4A700000000000000000026 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Chronato;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Config/Chronato.entitlements;
 				ENABLE_PREVIEWS = YES;
@@ -343,7 +347,7 @@
 		C4A700000000000000000027 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Chronato;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Config/Chronato.entitlements;
 				ENABLE_PREVIEWS = YES;

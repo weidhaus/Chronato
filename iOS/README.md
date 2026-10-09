@@ -12,13 +12,15 @@ iPhone adaptation of the Mac's interaction spec. The Studio tokens are in
 
 | Folder | Target membership | What |
 |---|---|---|
-| `App/` | Chronato | SwiftUI app: onboarding, Track, Reports, Settings tabs. App icon. |
+| `App/` | Chronato | SwiftUI app: onboarding, Track, Reports, Settings tabs. The `Brandmark` image. |
 | `Shared/` | Chronato + ChronatoWidgets | `PhoneTracker` (the engine), `AppGroup` + `SharedSnapshot`, App Intents, Live Activity attributes and views, widget views, Studio tokens and brand colours, `PrivacyInfo.xcprivacy`, AccentColor (`accentInk`). |
 | `Widgets/` | ChronatoWidgets | Widget extension: the status widget and the Live Activity configurations. |
 | `Config/` | none (build settings point here) | Info.plist additions and entitlements for both targets. |
 
 The folders are Xcode 16 *synchronized folders*: a file you add to one of them
-belongs to its targets without editing `project.pbxproj`.
+belongs to its targets without editing `project.pbxproj`. The one file outside
+them is the app icon, `../Branding/Chronato.icon`, a plain file reference in
+the app target's Resources.
 
 ## Identifiers
 
@@ -96,9 +98,21 @@ open "$(xcrun simctl get_app_container "iPhone 17" com.weidhaus.chronato data)/D
 
 ## App icon
 
-`swift scripts/make-icon.swift Branding` also writes `Branding/AppIcon-iOS-1024.png`
-(full bleed, no alpha). Copy it to `iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`,
-and a 264 px copy to the `Brandmark` image set that onboarding and About show:
+The app icon is the Mac's Icon Composer document, `Branding/Chronato.icon`,
+referenced from the project rather than copied (`ASSETCATALOG_COMPILER_APPICON_NAME`
+`Chronato`). actool compiles it into `Assets.car` twice over: the layered stack
+that iOS 26 and later draw with Liquid Glass (default, dark, tinted, clear),
+and flattened images for iOS 18 to 25 and the App Store. A change to the icon
+is made once, in `Branding/`, for both apps.
+
+To inspect what a build ships:
+
+```sh
+xcrun assetutil --info <Chronato.app>/Assets.car | jq -r '.[] | select(.Name == "Chronato") | [.AssetType, .Appearance // "any", .PixelWidth // ""] | @tsv'
+```
+
+The `Brandmark` image set that onboarding and About show is a 264 px copy of
+`Branding/AppIcon-iOS-1024.png`, which `swift scripts/make-icon.swift Branding` writes:
 `sips -Z 264 Branding/AppIcon-iOS-1024.png --out iOS/App/Assets.xcassets/Brandmark.imageset/Brandmark.png`.
 
 ## TestFlight

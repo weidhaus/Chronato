@@ -69,10 +69,10 @@ Ring centre (9, 9), radius 5.5 to the centre line, dot 3.4 at 42°.
 
 - `mark.svg`: the flat mark in one colour (`currentColor`).
 - `logo.svg`: the two-colour flat mark for web pages, on its own. Arc graphite in light mode, silver in dark mode; the dot tomato.
-- `Chronato.icon`: the Icon Composer document for macOS 26 and iOS 26. `icon.json` holds the graphite gradient fill and two glass layers, `Assets/arc.svg` and `Assets/dot.svg`, so the glass treats "now" as its own piece. `scripts/build-app.sh` compiles it with `actool` into `Contents/Resources/Assets.car` (`CFBundleIconName` Chronato).
+- `Chronato.icon`: the Icon Composer document, the app icon of both apps. `icon.json` holds the graphite gradient fill and two glass layers, `Assets/arc.svg` and `Assets/dot.svg`, so the glass treats "now" as its own piece. On the Mac, `scripts/build-app.sh` compiles it with `actool` into `Contents/Resources/Assets.car` (`CFBundleIconName` Chronato). The iPhone project references this same file; Xcode compiles it into the app's `Assets.car`, layered for iOS 26 and later and flattened for iOS 18 to 25 and the App Store.
 - `AppIcon.icns`: every macOS size, the fallback (`CFBundleIconFile`).
 - `logo-1024.png`: the macOS icon at 1024 px, for presentations and the README, where it stands above the name.
-- `AppIcon-iOS-1024.png`: the iPhone icon, full bleed (iOS rounds the corners) and without alpha. Copy it to `iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`, and a 264 px copy to `Brandmark.imageset/Brandmark.png` (`sips -Z 264`).
+- `AppIcon-iOS-1024.png`: the iPhone icon drawn flat, full bleed and without alpha. Its 264 px copy is the iPhone's `Brandmark.imageset/Brandmark.png` (`sips -Z 264`), the large mark in onboarding and About.
 - `brand-board.png`: this page's board.
 
 `swift scripts/make-icon.swift Branding` writes all of them except

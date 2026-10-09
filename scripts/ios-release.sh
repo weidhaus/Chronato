@@ -24,7 +24,6 @@ esac
 OUT=dist/ios
 ARCHIVE="$OUT/Chronato.xcarchive"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
-ICON=iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
 rm -rf "$ARCHIVE" "$OUT/export"
 mkdir -p "$OUT"
 
@@ -36,6 +35,9 @@ ARCHIVE_CMD=(xcodebuild -project iOS/Chronato.xcodeproj -scheme Chronato -config
 # What App Store Connect would reject after a long upload: an extension whose
 # version differs from the app's, a missing export-compliance key, icon or
 # privacy manifest, an icon with alpha, a simulator build.
+# The icon is Branding/Chronato.icon, compiled by actool into Assets.car: the
+# layered stack iOS 26+ draws with Liquid Glass, and flattened 1024 px images
+# for iOS 18-25 and the App Store, which must be opaque.
 check_archive() {
     local app="$ARCHIVE/Products/Applications/Chronato.app"
     local ext="$app/PlugIns/ChronatoWidgets.appex"
@@ -54,9 +56,12 @@ check_archive() {
     expect "$(key "$ext" CFBundleShortVersionString)" "$(key "$app" CFBundleShortVersionString)" "widget version"
     expect "$(key "$app" ITSAppUsesNonExemptEncryption)" false "ITSAppUsesNonExemptEncryption"
     expect "$(key "$app" NSSupportsLiveActivities)" true "NSSupportsLiveActivities"
-    expect "$(key "$app" CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName)" AppIcon "app icon name"
+    expect "$(key "$app" CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName)" Chronato "app icon name"
     expect "$(key "$app" ChronatoKeychainGroup)" "${prefix}com.weidhaus.chronato.shared" "keychain group"
-    expect "$(sips -g hasAlpha "$ICON" | awk '/hasAlpha/ { print $2 }')" no "app icon alpha"
+    local car
+    car="$(xcrun assetutil --info "$app/Assets.car" 2>/dev/null || echo '[]')"
+    expect "$(jq '[.[] | select(.Name == "Chronato" and .AssetType == "IconImageStack")] | length > 0' <<<"$car")" true "layered app icon in Assets.car"
+    expect "$(jq '[.[] | select(.Name == "Chronato" and .AssetType == "Icon Image" and .PixelWidth == 1024)] | length > 0 and all(.Opaque == true)' <<<"$car")" true "opaque 1024 px app icon in Assets.car"
     for bundle in "$app" "$ext"; do
         [[ -f "$bundle/PrivacyInfo.xcprivacy" ]] || { echo "✗ no PrivacyInfo.xcprivacy in ${bundle##*/}" >&2; fail=1; }
     done

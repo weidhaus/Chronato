@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Menu-bar only, also when run straight from .build without Info.plist.
         NSApp.setActivationPolicy(.accessory)
         Prefs.register()
+        AppearanceMode.follow()
         // Synchronously, before launch completes: a notification action that launched the app reaches us.
         Notifications.shared.setUp()
         Task { @MainActor in await TrackerStore.shared.bootstrap() }

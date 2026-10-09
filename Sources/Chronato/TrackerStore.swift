@@ -17,6 +17,8 @@ enum Prefs {
     static let lastActivityId = "lastActivityId"
     /// Settings tab to show next time the Settings window opens (SettingsTab raw value).
     static let settingsTab = "settingsTab"
+    /// AppearanceMode raw value: "system" (default), "light" or "dark". Applied live by AppearanceMode.follow().
+    static let appearance = "appearance"
 
     static func register() {
         UserDefaults.standard.register(defaults: [idleMinutes: 10, showCustomerInMenuBar: false, hotKeyEnabled: true])

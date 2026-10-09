@@ -58,8 +58,9 @@ enum Snapshot {
                 render(SettingsView(tab: tab).environment(TrackerStore.preview(.idle)), appearance: appearance,
                        to: dir.appendingPathComponent("settings-\(tab.rawValue)-\(name).png"))
             }
-            render(ReportsView(fixture: ReportsView.fixtureEntries()).environment(TrackerStore.preview(.idle)).frame(width: 880, height: 640),
-                   appearance: appearance, to: dir.appendingPathComponent("reports-\(name).png"))
+            renderWindow(ReportsView(fixture: ReportsView.fixtureEntries()).environment(TrackerStore.preview(.idle)),
+                         title: "Chronato Reports", size: CGSize(width: 960, height: 680),
+                         appearance: appearance, to: dir.appendingPathComponent("reports-\(name).png"))
         }
         print("✓ snapshots in \(dir.path)")
     }
@@ -88,6 +89,26 @@ enum Snapshot {
         fit()
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
         host.cacheDisplay(in: host.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    /// A view as its window shows it: titled, with the native toolbar its
+    /// `.toolbar` builds. Rendered offscreen; the window is never ordered in.
+    @MainActor static func renderWindow<V: View>(_ view: V, title: String, size: CGSize, appearance: NSAppearance.Name, to url: URL) {
+        let controller = NSHostingController(rootView: view)
+        controller.sceneBridgingOptions = [.toolbars, .title]
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = title
+        window.appearance = NSAppearance(named: appearance)
+        window.contentViewController = controller
+        window.setContentSize(size)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        // The toolbar's glass only composites on screen. Offscreen it is invisible
+        // on light, but blank white capsules on dark, so dark shows the content only.
+        guard let view = appearance == .aqua ? window.contentView?.superview : window.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 }

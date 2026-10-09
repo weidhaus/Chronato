@@ -313,7 +313,7 @@ With Reduce Motion (`accessibilityReduceMotion`) every one of these is immediate
 
 - The status item's label follows the state (§3); menu titles read as words — no "●", "⚠" or "⏸" characters in titles (VoiceOver reads them aloud); symbols are images.
 - Informative menu lines and all window text meet 4.5:1, essential non-text 3:1 (§2); nothing essential sits in the dimmed disabled colour.
-- Colour is never the only cue: customer names beside dots, errors with symbol and words, running shown by the glyph's hand and the word *Running*.
+- Colour is never the only cue: customer names beside dots, errors with symbol and words, running shown by the glyph's heavy C and the word *Running*.
 - Everything works by keyboard: native menu navigation and type-select; both panels keyboard-first; Reports toolbar shortcuts and the outline table; Full Keyboard Access reaches every control.
 - Increase Contrast strengthens tile borders to `controlBorder`; Reduce Transparency needs nothing (Studio surfaces are opaque); Reduce Motion as §10.
 
@@ -350,4 +350,4 @@ Accepted when:
 - `Sources/Chronato/NotePanel.swift`, `NewTimerPanel.swift` (new) — §5, §6.
 - `Sources/Chronato/ReportsView.swift` — §8. `SettingsView.swift`, `SettingsAgents.swift` — §9. `Updater.swift` — the menu's update item replaces `UpdateReminderButton`; Check for Updates… stays in About (`UpdateSettings`).
 - `Sources/Chronato/Snapshot.swift` — §12 renders and menu dumps.
-- `Sources/Chronato/Brand.swift` — `Brand.accent` forwards to `Studio.accentFill`; `MarkRing` draws the mark from `Branding/brand.md`'s construction: `Brand.mark(size:)` for About and the menu-bar glyph.
+- `Sources/Chronato/Brand.swift` — `Brand.accent` forwards to `Studio.accentFill`; `MarkRing` (`Sources/ChronatoCore/Mark.swift`, shared with the iPhone app) holds the mark from `Branding/brand.md`'s construction: `Brand.mark(size:)` for About and the menu-bar glyph.

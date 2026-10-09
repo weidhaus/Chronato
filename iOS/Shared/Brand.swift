@@ -1,3 +1,4 @@
+import ChronatoCore
 import SwiftUI
 
 // iOS copies of the Mac app's Brand and DurationText (Sources/Chronato/Brand.swift,
@@ -61,6 +62,35 @@ struct RunningDot: View {
             .font(.system(size: 8))
             .foregroundStyle(Studio.accentFill)
             .accessibilityHidden(true)
+    }
+}
+
+/// The flat mark, Progress C, fitted to its frame: the arc in the text colour,
+/// the dot tomato. Drawn from `MarkRing.master` (ChronatoCore), the geometry
+/// the Mac and the icons use. The app icon (`Brandmark`) stays the large mark.
+struct Mark: View {
+    var body: some View {
+        ZStack {
+            MarkShape(dot: false).fill(.primary)
+            MarkShape(dot: true).fill(Studio.accentFill)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+    }
+}
+
+/// One piece of the master, its bounding box centred in the view (whose y points down).
+private struct MarkShape: Shape {
+    let dot: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let mark = MarkRing.master
+        let box = mark.arc.boundingBoxOfPath.union(mark.dot.boundingBoxOfPath)
+        let scale = min(rect.width / box.width, rect.height / box.height)
+        let fit = CGAffineTransform(translationX: rect.midX, y: rect.midY)
+            .scaledBy(x: scale, y: -scale)
+            .translatedBy(x: -box.midX, y: -box.midY)
+        return Path(dot ? mark.dot : mark.arc).applying(fit)
     }
 }
 

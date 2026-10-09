@@ -70,7 +70,7 @@ struct ChronatoLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    IslandMark(isPaused: context.state.isPaused).font(.title2).padding(.leading, 4)
+                    IslandMark(isPaused: context.state.isPaused, size: 26).font(.title2).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     ActivityElapsed(state: context.state, size: 26).padding(.trailing, 4)

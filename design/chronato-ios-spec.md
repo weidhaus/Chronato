@@ -14,7 +14,7 @@ Design handoff · 9 October 2026. The iPhone adaptation of [the Mac specificatio
 
 ## 2. Identity and colour
 
-**Mark:** the app icon, from the `Brandmark` image set, large once — 88 pt in onboarding — and 56 pt in Settings → About. The iPhone app does not redraw the mark in code, so the logo work replaces it in one place. The Dynamic Island uses the SF Symbol `stopwatch`.
+**Mark:** the app icon, from the `Brandmark` image set, large once — 88 pt in onboarding — and 56 pt in Settings → About. The Dynamic Island shows the flat mark, `Mark` (`Shared/Brand.swift`), drawn from the same `MarkRing` geometry as the Mac (`ChronatoCore`): the arc in `.primary`, the dot in `accentFill`.
 
 **Tokens:** `iOS/Shared/Studio.swift` holds the Mac's tokens with the same names and values (`Sources/Chronato/Studio.swift`; change both together, as the art direction asks, rather than sharing a package). On iPhone they are inks and lines over the system's backgrounds:
 
@@ -170,7 +170,7 @@ One grouped form, the Mac's sections in its order:
 - **Disconnect…** in `errorInk`, with its confirmation ("Disconnect from Kimai?" — "Chronato removes the API token from this iPhone's Keychain. Your time entries in Kimai are not affected."); footer as before.
 - **Appearance:** a menu picker, **Match System**, **Light**, **Dark** with `circle.lefthalf.filled`, `sun.max`, `moon`; footer "Widgets and the Live Activity follow the system."
 - **AI Agents:** information only: agents book their own time from the Mac through Chronato's MCP server; their hours are in Reports under AI agents.
-- **About:** the icon at 56 pt, "Chronato", "Version 1.0.0 (1)", the GitHub link; footer "Kimai time tracking from your iPhone. Free and open source (MIT). Not affiliated with Kimai."
+- **About:** the icon at 56 pt, "Chronato", "Version 1.0.2 (1)", the GitHub link; footer "Kimai time tracking from your iPhone. Free and open source (MIT). Not affiliated with Kimai."
 
 ## 9. Onboarding
 
@@ -182,7 +182,7 @@ The system re-renders archived widget and Live Activity views in modes Chronato 
 
 - Containers are the system's: the widget's `.containerBackground(.fill.tertiary)` (silver in light, graphite in dark) and the Lock Screen's material for the Live Activity.
 - Text uses the hierarchical `.primary` and `.secondary` styles, never the appearance-dependent Studio colours (dynamic colours are not reliably resolved in archived views). The only Studio colour is `accentFill`, which has one value.
-- Tomato only for running: the 8 pt dot beside the ticking time (Home Screen widgets, Lock Screen Live Activity, expanded island), the `stopwatch` mark of the compact and minimal island, the island keyline. Paused shows `pause.fill` in `.secondary`.
+- Tomato only for running: the 8 pt dot beside the ticking time (Home Screen widgets, Lock Screen Live Activity, expanded island), the dot of the island's mark, the island keyline. Paused shows `pause.fill` in `.secondary`.
 - Buttons are neutral (`.bordered`, `.tint(.primary)`: the system's grey with a primary label) and run the same App Intents as before (Pause, Resume, Stop, Start; `LiveActivityIntent`s in the app's process).
 - Times use the default system design (not rounded) with monospaced digits.
 
@@ -193,7 +193,7 @@ The system re-renders archived widget and Live Activity views in modes Chronato 
 | Lock Screen rectangular | time, activity, customer | "Paused", activity, "1:13 worked before" | "Today 2:35", last activity, customer | "Chronato", "Not connected to Kimai" |
 | Lock Screen inline | `stopwatch` time + activity | `pause.fill` "Paused · Activity" | `stopwatch` "Today 2:35" | "Chronato" |
 | Live Activity, Lock Screen | "Activity · Project", ● "Customer — Note"; ● time; **Pause**, **Stop** | the same with "Paused" over "1:13"; **Resume**, **Stop** | — | — |
-| Dynamic Island | compact: tomato `stopwatch`, the time (Subheadline semibold, 60 pt wide); expanded: mark, customer, ● time, names, buttons | grey `pause.fill`, "1:13" in secondary | — | — |
+| Dynamic Island | compact: the mark (arc white, dot tomato), the time (Subheadline semibold, 60 pt wide); expanded: mark, customer, ● time, names, buttons | grey `pause.fill`, "1:13" in secondary | — | — |
 
 ## 11. Motion and haptics
 
@@ -235,7 +235,7 @@ Accepted when:
 
 ## 14. Implementation map
 
-- `iOS/Shared/Studio.swift` (new) — tokens, `AppearanceMode`. `iOS/Shared/Brand.swift` — `Brand.accent` forwards to `accentFill`; `Dot`, `RunningDot`, `Problem`; `DurationText.hours` as on the Mac. `iOS/Shared/Assets.xcassets/AccentColor` — `accentInk`, light and dark.
+- `iOS/Shared/Studio.swift` (new) — tokens, `AppearanceMode`. `iOS/Shared/Brand.swift` — `Brand.accent` forwards to `accentFill`; `Dot`, `RunningDot`, `Mark`, `Problem`; `DurationText.hours` as on the Mac. `iOS/Shared/Assets.xcassets/AccentColor` — `accentInk`, light and dark.
 - `iOS/App/ChronatoApp.swift` — root tint, Appearance, the Debug scroll aid. `TrackView.swift` — §4. `NewTimerSheet.swift` (was `StartForm.swift`) — §5. `NoteSheet.swift` (was `TimerCard.swift`) — §6. `ReportsTab.swift` — §7. `SettingsView.swift` — §8. `OnboardingView.swift` — §9.
 - `iOS/Shared/WidgetViews.swift`, `LiveActivity.swift`, `iOS/Widgets/ChronatoWidgets.swift` — §10. `WidgetGallery.swift` renders them.
 - `iOS/Shared/PhoneTracker.swift` — `Prefs.appearance`, `canAct`, the `offline` and `error` fixtures. Its behaviour, the intents and the snapshot are unchanged.

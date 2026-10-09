@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Branding/logo.svg" width="112" alt="Chronato logo: a thick ring cut into a C, with a tomato-red dot on the ring ahead of it">
+  <img src="Branding/logo-1024.png" width="128" alt="Chronato app icon: a thick white ring cut into a C, with a tomato-red dot on the ring ahead of it, on a dark graphite tile">
 </p>
 
 <h1 align="center">Chronato</h1>

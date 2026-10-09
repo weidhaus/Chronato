@@ -49,7 +49,7 @@ dot 11, a cut of 5 and a mouth of 8, so the cut stays a whole pixel.
 
 ## Usage
 
-- **The mark alone**, or the **app icon beside the wordmark**. Never the bare mark directly before the word "Chronato": it reads as "C Chronato". The lockup is the icon tile, then "Chronato" in SF Pro Semibold with slight negative tracking, the tile about twice the cap height.
+- **The mark alone**, or the **app icon with the wordmark** (beside it, or above it as in the README). Never the bare mark directly before the word "Chronato": it reads as "C Chronato". The lockup is the icon tile, then "Chronato" in SF Pro Semibold with slight negative tracking, the tile about twice the cap height.
 - In a one-colour version (black, white, graphite or silver), arc and dot take the same colour (`mark.svg`, `currentColor`).
 - Don't rotate, mirror, outline or stretch the mark, round the head's cut, move the dot off the ring, or put text inside it.
 - Leave clear space of at least a quarter of the mark's height on all sides.
@@ -59,24 +59,25 @@ dot 11, a cut of 5 and a mouth of 8, so the cut stays a whole pixel.
 
 `Brand.menuBarGlyph(running:)` in `Sources/Chronato/Brand.swift`: an 18 pt
 template image, an optical redraw rather than a scaled copy, never tinted.
-Ring centre (9, 9), radius 5.5 to the centre line, dot 3.4 at 42°, cuts of
-at least 1.2 pt so they survive 1x.
+Ring centre (9, 9), radius 5.5 to the centre line, dot 3.4 at 42°.
 
-- **Idle: the dial at rest.** A thin closed track (band 1.5 pt) with the dot set into it. A closed shape reads as still, not as a spinner or a refresh arrow.
-- **Running: the track fills to the C.** Band 3 pt, the mouth opens, next to the `h:mm` title. Shape and weight both change, so the state reads at a glance without colour, at 1x and 2x.
+- **Idle: the dial at rest.** A thin closed track (band 1.5 pt) with the dot set into it: the gaps either side of the dot are 0.4 pt hairlines that close up at 1x. No open end, so it reads as still, not as a spinner or a refresh arrow.
+- **Running: the track fills to the C.** Band 3 pt, the cut (1.2 pt) and the mouth (2.2 pt) open, next to the `h:mm` title. Shape and weight both change, so the state reads at a glance without colour, at 1x and 2x.
 - **Paused:** the idle glyph and a 7 pt `pause.fill` badge (`MenuBarController`).
 
 ## Files
 
 - `mark.svg`: the flat mark in one colour (`currentColor`).
-- `logo.svg`: the README logo. Arc graphite in light mode, silver in dark mode; the dot tomato.
+- `logo.svg`: the two-colour flat mark for web pages, on its own. Arc graphite in light mode, silver in dark mode; the dot tomato.
 - `Chronato.icon`: the Icon Composer document for macOS 26 and iOS 26. `icon.json` holds the graphite gradient fill and two glass layers, `Assets/arc.svg` and `Assets/dot.svg`, so the glass treats "now" as its own piece. `scripts/build-app.sh` compiles it with `actool` into `Contents/Resources/Assets.car` (`CFBundleIconName` Chronato).
 - `AppIcon.icns`: every macOS size, the fallback (`CFBundleIconFile`).
-- `logo-1024.png`: the macOS icon at 1024 px, for presentations.
+- `logo-1024.png`: the macOS icon at 1024 px, for presentations and the README, where it stands above the name.
 - `AppIcon-iOS-1024.png`: the iPhone icon, full bleed (iOS rounds the corners) and without alpha. Copy it to `iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`, and a 264 px copy to `Brandmark.imageset/Brandmark.png` (`sips -Z 264`).
 - `brand-board.png`: this page's board.
 
 `swift scripts/make-icon.swift Branding` writes all of them except
 `Chronato.icon/icon.json`, which is edited by hand or in Icon Composer.
-`Brand.swift` draws the same mark (`MarkRing`) for Settings → About and the
-menu bar: change the script and `Brand.swift` together.
+The apps draw the same mark from `MarkRing` in `Sources/ChronatoCore/Mark.swift`:
+the Mac's Settings → About and menu-bar glyph (`Brand.swift`), and the iPhone's
+Dynamic Island (`iOS/Shared/Brand.swift`, `Mark`). Change the script and
+`Mark.swift` together.

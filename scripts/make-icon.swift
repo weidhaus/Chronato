@@ -5,17 +5,17 @@
 //
 // Writes into <dir>:
 //   AppIcon.icns            every macOS iconset size (the fallback beside the Icon Composer icon)
-//   logo-1024.png           that macOS icon at 1024 px, for presentations
+//   logo-1024.png           that macOS icon at 1024 px, for presentations and the README
 //   AppIcon-iOS-1024.png    the iPhone icon: full bleed, no alpha. Copy it to
 //                           iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
-//   mark.svg, logo.svg      the flat mark: one colour (currentColor), and the README's two-colour logo
+//   mark.svg, logo.svg      the flat mark: one colour (currentColor), and in two colours for web pages
 //   Chronato.icon/Assets/   arc.svg and dot.svg, the Icon Composer layers (icon.json is edited by hand
 //                           or in Icon Composer; this script never touches it)
 //   brand-board.png         every size, the menu-bar glyph, the lockup and the colours on one board
 //
 // The mark, "Progress C", is defined once below (`Ring`, `Mark.master`) on a
-// 64-unit grid. Brand.swift draws the same mark and the menu-bar glyph in the
-// app: change both together.
+// 64-unit grid. The apps draw the same mark and the menu-bar glyph from
+// `MarkRing` in Sources/ChronatoCore/Mark.swift: change both together.
 
 import AppKit
 import UniformTypeIdentifiers
@@ -77,7 +77,7 @@ enum Mark {
     /// Running: the track fills to the heavy C. Same centre line and dot in both.
     static func glyph(running: Bool) -> Ring {
         Ring(center: CGPoint(x: 9, y: 9), radius: 5.5, weight: running ? 3 : 1.5, dot: 3.4, dotAngle: 42,
-             cut: 1.2, mouth: running ? 2.2 : 1.2)
+             cut: running ? 1.2 : 0.4, mouth: running ? 2.2 : 0.4)
     }
 }
 

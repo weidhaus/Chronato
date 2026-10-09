@@ -1,4 +1,5 @@
 import AppKit
+import ChronatoCore
 import SwiftUI
 
 /// Chronato's colours and marks. One accent (tomato), graphite and silver
@@ -45,53 +46,6 @@ enum Brand {
         s.removeFirst()
         guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
         return Color(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)
-    }
-}
-
-/// The mark, Progress C: one thick ring cut in two, the arc (the time
-/// tracked) and the dot (now) on the same centre line, just ahead of the
-/// arc's head. The head ends in a straight radial cut, the tail round.
-/// A copy of `Ring` and `Mark` in scripts/make-icon.swift, which draws the
-/// icons and the SVGs: change both together (Branding/brand.md).
-/// Grid units, y up, degrees counter-clockwise from 3 o'clock.
-struct MarkRing {
-    var center: CGPoint
-    var radius: CGFloat  // centre line of the band
-    var weight: CGFloat  // band width
-    var diameter: CGFloat  // the dot
-    var dotAngle: CGFloat
-    var cut: CGFloat  // clear distance, head's cut → dot
-    var mouth: CGFloat  // clear distance, dot → tail's round cap
-
-    /// The 64-unit master.
-    static let master = MarkRing(center: CGPoint(x: 33, y: 32), radius: 14, weight: 9, diameter: 9.4, dotAngle: 42, cut: 2.4, mouth: 6)
-
-    /// On an 18 pt canvas. Same centre line and dot in both states.
-    static func glyph(running: Bool) -> MarkRing {
-        MarkRing(center: CGPoint(x: 9, y: 9), radius: 5.5, weight: running ? 3 : 1.5, diameter: 3.4, dotAngle: 42,
-                 cut: 1.2, mouth: running ? 2.2 : 1.2)
-    }
-
-    private func angle(chord: CGFloat) -> CGFloat { 2 * asin(chord / (2 * radius)) }
-    private func point(_ radians: CGFloat) -> CGPoint {
-        CGPoint(x: center.x + radius * cos(radians), y: center.y + radius * sin(radians))
-    }
-
-    var arc: CGPath {
-        let a = dotAngle * .pi / 180
-        let head = a + angle(chord: diameter / 2 + cut)
-        let tail = a - angle(chord: diameter / 2 + mouth + weight / 2)
-        let path = CGMutablePath()
-        path.addArc(center: center, radius: radius + weight / 2, startAngle: head, endAngle: tail + 2 * .pi, clockwise: false)
-        path.addArc(center: point(tail), radius: weight / 2, startAngle: tail, endAngle: tail + .pi, clockwise: false)
-        path.addArc(center: center, radius: radius - weight / 2, startAngle: tail + 2 * .pi, endAngle: head, clockwise: true)
-        path.closeSubpath()
-        return path
-    }
-
-    var dot: CGPath {
-        let c = point(dotAngle * .pi / 180)
-        return CGPath(ellipseIn: CGRect(x: c.x - diameter / 2, y: c.y - diameter / 2, width: diameter, height: diameter), transform: nil)
     }
 }
 

@@ -195,14 +195,22 @@ struct ActivityButtons: View {
     }
 }
 
-/// Dynamic Island compact leading and minimal: tomato while running, grey when paused.
+/// Dynamic Island compact leading, minimal and expanded: the mark while
+/// running (its dot the tomato), a grey pause symbol when paused.
 struct IslandMark: View {
     let isPaused: Bool
+    var size: CGFloat = 20
 
     var body: some View {
-        Image(systemName: isPaused ? "pause.fill" : "stopwatch")
-            .foregroundStyle(isPaused ? AnyShapeStyle(.secondary) : AnyShapeStyle(Studio.accentFill))
-            .accessibilityLabel(isPaused ? "Chronato, paused" : "Chronato, running")
+        Group {
+            if isPaused {
+                Image(systemName: "pause.fill").foregroundStyle(.secondary)
+            } else {
+                Mark().frame(width: size, height: size)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isPaused ? "Chronato, paused" : "Chronato, running")
     }
 }
 

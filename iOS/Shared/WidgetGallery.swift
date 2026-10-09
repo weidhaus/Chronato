@@ -61,7 +61,7 @@ enum WidgetGallery {
                        scheme, dir, "island-compact-\(state)")
                 render(VStack(spacing: 8) {
                     HStack(alignment: .top) {
-                        IslandMark(isPaused: content.isPaused).font(.title2).padding(.leading, 4)
+                        IslandMark(isPaused: content.isPaused, size: 26).font(.title2).padding(.leading, 4)
                         Spacer()
                         Text(attributes.customerName).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         Spacer()

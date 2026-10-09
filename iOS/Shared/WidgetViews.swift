@@ -5,6 +5,10 @@ import WidgetKit
 /// The Home Screen and Lock Screen widget, from the App Group snapshot.
 /// Running: names, ticking time, Pause and Stop. Paused: Resume. Idle: today's
 /// time and "Start <most recent>". Shared so the app's widget gallery renders it.
+///
+/// Studio in a widget (spec §9): the system's container and hierarchical text
+/// styles, so the Home Screen's tinted and clear modes and the Lock Screen's
+/// tinting keep working; neutral buttons; tomato only as the running dot.
 struct StatusWidgetView: View {
     let snapshot: SharedSnapshot?
     let family: WidgetFamily
@@ -45,11 +49,11 @@ struct StatusWidgetView: View {
                 customer(running.work)
                 Text(running.work.activityName).font(.headline).lineLimit(2)
                 Spacer(minLength: 4)
-                timer(running.begin, size: 30)
+                timer(running.begin, size: 28)
                 Spacer(minLength: 6)
                 HStack(spacing: 8) {
-                    pauseButton(compact: true)
-                    stopButton(prominent: true, compact: true)
+                    button(PauseTrackingIntent(), "Pause", "pause.fill", compact: true)
+                    button(StopTrackingIntent(), "Stop", "stop.fill", compact: true)
                 }
             case let .paused(paused):
                 pausedLabel
@@ -57,9 +61,9 @@ struct StatusWidgetView: View {
                 Spacer(minLength: 4)
                 worked(paused.workedSeconds)
                 Spacer(minLength: 6)
-                resumeButton
+                button(ResumeTrackingIntent(), "Resume", "play.fill", compact: false)
             case let .idle(today, last):
-                todayTotal(today, size: 30)
+                todayTotal(today, size: 28)
                 Spacer(minLength: 6)
                 if let last {
                     Text(last.customerName).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.bottom, 4)
@@ -77,22 +81,20 @@ struct StatusWidgetView: View {
                 case .disconnected:
                     disconnected
                 case let .running(running):
-                    customer(running.work, withProject: true)
                     names(running.work)
                     Spacer(minLength: 4)
-                    timer(running.begin, size: 36)
+                    timer(running.begin, size: 34)
                 case let .paused(paused):
-                    pausedLabel
-                    customer(paused.work, withProject: true).padding(.top, 2)
+                    pausedLabel.padding(.bottom, 2)
                     names(paused.work)
                     Spacer(minLength: 4)
                     worked(paused.workedSeconds)
                 case let .idle(today, last):
-                    todayTotal(today, size: 36)
+                    todayTotal(today, size: 34)
                     Spacer(minLength: 4)
                     if let last {
-                        Text("Last: \(last.activityName)").font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Text("\(last.customerName) · \(last.projectName)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text("\(last.activityName) · \(last.projectName)").font(.subheadline.weight(.semibold)).lineLimit(1)
+                        customer(last)
                     }
                 }
             }
@@ -103,11 +105,11 @@ struct StatusWidgetView: View {
                 case .disconnected:
                     EmptyView()
                 case .running:
-                    pauseButton(compact: false)
-                    stopButton(prominent: true, compact: false)
+                    button(PauseTrackingIntent(), "Pause", "pause.fill", compact: false)
+                    button(StopTrackingIntent(), "Stop", "stop.fill", compact: false)
                 case .paused:
-                    resumeButton
-                    stopButton(prominent: false, compact: false)
+                    button(ResumeTrackingIntent(), "Resume", "play.fill", compact: false)
+                    button(StopTrackingIntent(), "Stop", "stop.fill", compact: false)
                 case let .idle(_, last):
                     if let last { startButton(last, title: "Start") }
                 }
@@ -124,7 +126,7 @@ struct StatusWidgetView: View {
             switch phase {
             case .disconnected:
                 Text("Chronato").font(.headline)
-                Text("Not connected").foregroundStyle(.secondary)
+                Text("Not connected to Kimai").foregroundStyle(.secondary)
             case let .running(running):
                 Text(timerInterval: running.begin...Date.distantFuture, countsDown: false)
                     .font(.headline)
@@ -135,7 +137,7 @@ struct StatusWidgetView: View {
             case let .paused(paused):
                 Label("Paused", systemImage: "pause.fill").font(.headline).widgetAccentable()
                 Text(paused.work.activityName)
-                Text("\(DurationText.short(paused.workedSeconds)) worked").foregroundStyle(.secondary)
+                Text("\(DurationText.short(paused.workedSeconds)) worked before").foregroundStyle(.secondary)
             case let .idle(today, last):
                 Text("Today \(DurationText.short(today))").font(.headline).monospacedDigit().widgetAccentable()
                 if let last {
@@ -168,27 +170,31 @@ struct StatusWidgetView: View {
     // MARK: Parts
 
     private var disconnected: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: "stopwatch").font(.title2).foregroundStyle(Brand.accent)
-            Text("Open Chronato to connect to Kimai.").font(.subheadline)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Not connected to Kimai").font(.subheadline.weight(.semibold))
+            Text("Open Chronato to connect.").font(.caption).foregroundStyle(.secondary)
         }
     }
 
-    private func customer(_ work: Work, withProject: Bool = false) -> some View {
+    private func customer(_ work: Work) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Dot(hex: work.customerColor)
-            Text(withProject ? "\(work.customerName) · \(work.projectName)" : work.customerName).lineLimit(1)
+            Text(work.customerName).lineLimit(1)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
     }
 
+    /// "Activity · Project", then the customer and the note, as in the app.
     private func names(_ work: Work) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(work.activityName).font(.headline).lineLimit(1)
-            if let note = work.note, !note.isEmpty {
-                Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text("\(work.activityName) · \(work.projectName)").font(.headline).lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Dot(hex: work.customerColor)
+                Text([work.customerName, work.note ?? ""].filter { !$0.isEmpty }.joined(separator: " — ")).lineLimit(1)
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -196,34 +202,36 @@ struct StatusWidgetView: View {
         Label("Paused", systemImage: "pause.fill").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
     }
 
+    /// The ticking time, the tomato dot beside it.
     private func timer(_ begin: Date, size: CGFloat) -> some View {
-        Text(timerInterval: begin...Date.distantFuture, countsDown: false)
-            .font(.system(size: size, weight: .semibold, design: .rounded))
-            .monospacedDigit()
-            .minimumScaleFactor(0.6)
-            .lineLimit(1)
-            .foregroundStyle(Brand.accent)
-            .widgetAccentable()
-            .accessibilityLabel("Running since \(begin.formatted(date: .omitted, time: .shortened))")
+        HStack(spacing: 6) {
+            RunningDot()
+            Text(timerInterval: begin...Date.distantFuture, countsDown: false)
+                .font(.system(size: size, weight: .semibold).monospacedDigit())
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .widgetAccentable()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Running since \(begin.formatted(date: .omitted, time: .shortened))")
     }
 
     private func worked(_ seconds: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(DurationText.short(seconds))
-                .font(.system(size: 26, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-            Text("worked").font(.caption).foregroundStyle(.secondary)
+                .font(.system(size: 26, weight: .semibold).monospacedDigit())
+            Text("worked before").font(.caption)
         }
+        .foregroundStyle(.secondary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(DurationText.spoken(seconds)) worked before the break")
+        .accessibilityLabel("\(DurationText.spoken(seconds)) worked before")
     }
 
     private func todayTotal(_ seconds: Int, size: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             Text(DurationText.short(seconds))
-                .font(.system(size: size, weight: .semibold, design: .rounded))
-                .monospacedDigit()
+                .font(.system(size: size, weight: .semibold).monospacedDigit())
                 .widgetAccentable()
         }
         .accessibilityElement(children: .ignore)
@@ -231,32 +239,23 @@ struct StatusWidgetView: View {
     }
 
     // Buttons run App Intents (LiveActivityIntents: in the app's process).
+    // Neutral, as in the app: the system's grey fill, primary label.
 
-    private func pauseButton(compact: Bool) -> some View {
-        Button(intent: PauseTrackingIntent()) {
-            label("Pause", "pause.fill", compact: compact)
+    /// Icon only in the small widget's pair (its name for VoiceOver), icon and title otherwise.
+    private func button(_ intent: some AppIntent, _ title: String, _ image: String, compact: Bool) -> some View {
+        Button(intent: intent) {
+            Group {
+                if compact {
+                    Image(systemName: image).accessibilityLabel(title)
+                } else {
+                    Label(title, systemImage: image)
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
-        .tint(.primary) // gray, as in the app: tomato text on a pale tomato fill reads poorly
-    }
-
-    @ViewBuilder private func stopButton(prominent: Bool, compact: Bool) -> some View {
-        let button = Button(intent: StopTrackingIntent()) {
-            label("Stop", "stop.fill", compact: compact)
-        }
-        if prominent {
-            button.buttonStyle(.borderedProminent).tint(Brand.accent)
-        } else {
-            button.buttonStyle(.bordered).tint(.primary)
-        }
-    }
-
-    private var resumeButton: some View {
-        Button(intent: ResumeTrackingIntent()) {
-            label("Resume", "play.fill", compact: false)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(Brand.accent)
+        .tint(.primary)
     }
 
     private func startButton(_ work: Work, title: String) -> some View {
@@ -266,22 +265,9 @@ struct StatusWidgetView: View {
                 .frame(maxWidth: .infinity)
         }
         .font(.subheadline.weight(.semibold))
-        .buttonStyle(.borderedProminent)
-        .tint(Brand.accent)
+        .buttonStyle(.bordered)
+        .tint(.primary)
         .accessibilityLabel("Start \(work.activityName), \(work.customerName)")
-    }
-
-    /// Icon only in the small widget (its name for VoiceOver), icon and title in the medium one.
-    private func label(_ title: String, _ image: String, compact: Bool) -> some View {
-        Group {
-            if compact {
-                Image(systemName: image).accessibilityLabel(title)
-            } else {
-                Label(title, systemImage: image)
-            }
-        }
-        .font(.subheadline.weight(.semibold))
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -296,9 +282,9 @@ extension SharedSnapshot {
         var snapshot = SharedSnapshot(isConnected: state != .unconfigured, running: nil, paused: nil,
                                       todaySeconds: 2 * 3600 + 35 * 60, lastWork: work, updatedAt: now)
         switch state {
-        case .running: snapshot.running = .init(entryId: 200, begin: now.addingTimeInterval(-(72 * 60 + 9)), work: work)
+        case .running, .offline: snapshot.running = .init(entryId: 200, begin: now.addingTimeInterval(-(72 * 60 + 9)), work: work)
         case .paused: snapshot.paused = PausedSession(work: work, pausedAt: now.addingTimeInterval(-600), workedSeconds: 4380)
-        case .idle, .unconfigured: break
+        case .idle, .unconfigured, .error: break
         }
         return snapshot
     }

@@ -5,8 +5,9 @@ import SwiftUI
 
 /// Chronato's colours: one accent (tomato); everything else is the system's.
 enum Brand {
-    /// Tomato: running state, primary buttons, the mark's hand. Also AccentColor in Shared/Assets.xcassets.
-    static let accent = Color(red: 0xE5 / 255, green: 0x53 / 255, blue: 0x3D / 255)
+    /// Tomato: the running dot, the mark. Studio holds the tokens and their
+    /// rules (ink for text and tint, fill for marks).
+    static let accent = Studio.accentFill
 
     /// Kimai colours come as "#RRGGBB".
     static func color(hex: String?) -> Color? {
@@ -17,7 +18,7 @@ enum Brand {
     }
 }
 
-/// "1:05" (h:mm), "1:05:09" with seconds, "7.5 h" for reports.
+/// "1:05" (h:mm), "1:05:09" with seconds, "7.50 h" for reports.
 enum DurationText {
     static func short(_ seconds: Int) -> String {
         let s = max(0, seconds)
@@ -29,9 +30,9 @@ enum DurationText {
         return String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
     }
 
-    static func hours(_ seconds: Int) -> String {
-        let h = Double(max(0, seconds)) / 3600
-        return h < 10 ? String(format: "%.2f h", h) : String(format: "%.1f h", h)
+    /// The user's decimal mark, always two decimals so a column lines up and quarter hours stay exact.
+    static func hours(_ seconds: Int, locale: Locale = .current) -> String {
+        (Double(max(0, seconds)) / 3600).formatted(.number.precision(.fractionLength(2)).locale(locale)) + " h"
     }
 
     /// "1 hour, 5 minutes" for VoiceOver.
@@ -40,7 +41,8 @@ enum DurationText {
     }
 }
 
-/// Kimai colour dot. An SF Symbol (not a Circle) so it sits on the text baseline.
+/// Kimai colour dot beside a customer name, never alone. An SF Symbol (not a
+/// Circle) so it sits on the text baseline.
 struct Dot: View {
     let hex: String?
 
@@ -49,5 +51,36 @@ struct Dot: View {
             .font(.system(size: 9))
             .foregroundStyle(Brand.color(hex: hex) ?? .secondary)
             .accessibilityHidden(true)
+    }
+}
+
+/// The 8 pt tomato dot beside the word "Running": the one "now" mark.
+struct RunningDot: View {
+    var body: some View {
+        Image(systemName: "circle.fill")
+            .font(.system(size: 8))
+            .foregroundStyle(Studio.accentFill)
+            .accessibilityHidden(true)
+    }
+}
+
+/// A problem, said with a symbol and words, never colour alone: an error in
+/// `errorInk` (tomato and this red are too close to tell apart), a warning
+/// with an orange symbol and ordinary text (orange text fails contrast).
+struct Problem: View {
+    let text: String
+    var isError = true
+
+    init(_ text: String, isError: Bool = true) {
+        self.text = text
+        self.isError = isError
+    }
+
+    var body: some View {
+        Label {
+            Text(text).foregroundStyle(isError ? Studio.errorInk : Studio.textPrimary)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(isError ? Studio.errorInk : .orange)
+        }
     }
 }

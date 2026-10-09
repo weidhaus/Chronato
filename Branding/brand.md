@@ -29,8 +29,11 @@ generated `mark.svg` repeats the numbers in a comment.
 | Tail | round cap centred at −23.8°, 6 units clear of the dot (the mouth) |
 | Size | outer diameter 37 units, 58 % of the grid; the bounding box is centred |
 
-At 16 px the icon uses an optical redraw (`Mark.small`): radius 15, band 10,
-dot 11, a cut of 5 and a mouth of 8, so the cut stays a whole pixel.
+The 16 px size of the `AppIcon.icns` fallback uses an optical redraw
+(`Mark.small`): radius 15, band 10, dot 11, a cut of 5 and a mouth of 8, so the
+cut stays a whole pixel. The shipped app has `Assets.car`, so macOS draws the
+Icon Composer layers at every size and shows this redraw only where the icns is
+used.
 
 ## Colours
 

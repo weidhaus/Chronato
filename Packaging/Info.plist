@@ -26,7 +26,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>LSMinimumSystemVersion</key>
-	<string>15.0</string>
+	<string>26.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<!-- Plain http only to this Mac (a local Kimai); KimaiConnection refuses it elsewhere. -->

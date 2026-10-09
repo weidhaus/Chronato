@@ -32,7 +32,7 @@ Kimai has no paused state. Pause stops the entry; Resume starts a new one with t
 
 ## Install (Mac)
 
-Requires macOS 15 or later and a Kimai 2 server with API access over HTTPS.
+Requires a Mac with Apple silicon, macOS 26 or later, and a Kimai 2 server with API access over HTTPS.
 
 Download `Chronato-<version>.dmg` from [Releases](https://github.com/weidhaus/Chronato/releases) and drag Chronato to Applications. Releases are signed with a Developer ID and notarized by Apple, and Chronato keeps itself up to date.
 
@@ -60,7 +60,7 @@ swift build
 swift test                                      # ChronatoCore unit tests (stubbed URLSession, temp dirs)
 scripts/e2e.sh                                  # the real engine against a local mock Kimai (scripts/mock-kimai.py)
 swift run Chronato snapshot /tmp/chronato-ui    # every Mac UI surface as PNGs, light and dark, fixture data
-scripts/build-app.sh                            # signed universal app in dist/Chronato.app
+scripts/build-app.sh                            # signed Apple-silicon app in dist/Chronato.app
 swift scripts/make-icon.swift Branding          # redraw the icons
 ```
 

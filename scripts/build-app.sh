@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds dist/Chronato.app: universal release binary, Info.plist stamped with
+# Builds dist/Chronato.app: Apple-silicon-only (arm64) release binary, Info.plist stamped with
 # the git version, the app icon, and a Developer ID signature.
 #
 #   scripts/build-app.sh              build and sign
@@ -53,14 +53,10 @@ DESCRIBE="$(git describe --tags --always --dirty 2>/dev/null || echo unknown)"
 # 1. Build -------------------------------------------------------------------
 
 bold "→ building $NAME $VERSION ($BUILD, $DESCRIBE)"
-UNIVERSAL=(-c release --arch arm64 --arch x86_64)
-if swift build "${UNIVERSAL[@]}"; then
-    BIN="$(swift build "${UNIVERSAL[@]}" --show-bin-path)/$NAME"
-else
-    warn "! universal build failed; building for $(uname -m) only. The app will run on $(uname -m) Macs only."
-    swift build -c release
-    BIN="$(swift build -c release --show-bin-path)/$NAME"
-fi
+# Apple silicon only: no Intel slice anywhere, so macOS never offers Rosetta.
+ARM64=(-c release --arch arm64)
+swift build "${ARM64[@]}"
+BIN="$(swift build "${ARM64[@]}" --show-bin-path)/$NAME"
 [[ -x "$BIN" ]] || die "no binary at $BIN"
 ok "binary: $(lipo -archs "$BIN")"
 
@@ -75,13 +71,14 @@ plutil -lint -s "$APP/Contents/Info.plist" || die "Info.plist is invalid"
 cp Branding/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # Sparkle is a dynamic framework the binary loads through @rpath. SwiftPM
-# leaves it beside the binary (universal and native builds alike); the bundle
-# carries it in Contents/Frameworks, and the rpath points there. ditto keeps
-# the framework's symlinks.
+# leaves it beside the binary; the bundle carries it in Contents/Frameworks,
+# and the rpath points there. ditto keeps the framework's symlinks.
+# Sparkle ships universal, so its Intel slices are stripped here; the
+# signing below replaces the signatures this invalidates.
 FRAMEWORK="$(dirname "$BIN")/Sparkle.framework"
 [[ -d "$FRAMEWORK" ]] || die "no Sparkle.framework beside $BIN"
 mkdir -p "$APP/Contents/Frameworks"
-ditto "$FRAMEWORK" "$APP/Contents/Frameworks/Sparkle.framework"
+ditto --arch arm64 "$FRAMEWORK" "$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/$NAME"
 ok "assembled $APP"
 
@@ -128,6 +125,14 @@ codesign -dv "$APP" 2>&1 | sed 's/^/  /'
 # output, so pipefail cannot trip over a SIGPIPE.
 otool -l "$APP/Contents/MacOS/$NAME" | grep "path @executable_path/../Frameworks " >/dev/null \
     || die "$APP has no @executable_path/../Frameworks rpath; it cannot find Sparkle"
+
+# Every Mach-O in the bundle must be arm64 and nothing else: one Intel slice
+# and Finder calls the app Universal and offers "Open using Rosetta".
+while IFS= read -r -d '' f; do
+    archs="$(lipo -archs "$f" 2>/dev/null || true)"
+    [[ -z "$archs" || "$archs" == "arm64" ]] || die "$f is $archs, expected arm64 only"
+done < <(find "$APP" -type f -print0)
+ok "Apple silicon only: every binary is arm64"
 # A valid signature does not prove the binary starts. `--version` loads it
 # under the hardened runtime, so dyld must accept the re-signed Sparkle, and
 # reads the stamped Info.plist, all without a GUI. stderr stays visible: when

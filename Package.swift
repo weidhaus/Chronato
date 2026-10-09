@@ -1,9 +1,9 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.2
 import PackageDescription
 
 let package = Package(
     name: "Chronato",
-    platforms: [.macOS(.v15), .iOS(.v18)],
+    platforms: [.macOS(.v26), .iOS(.v18)],
     products: [
         // The iOS app (iOS/Chronato.xcodeproj) links this as a local package.
         .library(name: "ChronatoCore", targets: ["ChronatoCore"]),

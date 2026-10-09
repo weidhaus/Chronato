@@ -13,7 +13,8 @@
 # every release carries its own appcast.xml, and GitHub's "latest" redirect
 # points Sparkle at the newest one.
 #
-# Needs a Developer ID Application certificate, notarization credentials (an App
+# Needs a Developer ID Application certificate (several distinct ones: pick one
+# with DEVELOPER_ID_SHA1=<SHA-1>), notarization credentials (an App
 # Store Connect API key via ASC_KEY_PATH/ASC_KEY_ID/ASC_ISSUER_ID, or a notarytool
 # keychain profile NOTARY_PROFILE, default "weidhaus"), gh logged in, and Sparkle's EdDSA private
 # key in the login keychain (generate_appcast signs with it and may ask first).
@@ -40,7 +41,7 @@ while (( $# )); do
         # Checked here: a trailing --notes would make the second shift fail,
         # and set -e would end the script without a word.
         --notes) (( $# >= 2 )) || die "--notes needs a file"; NOTES="$2"; shift ;;
-        -h | --help) sed -n '3,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown option: $1 (try --help)" >&2; exit 2 ;;
         *) [[ -z "$VERSION" ]] || die "one version only"; VERSION="$1" ;;
     esac
@@ -101,19 +102,22 @@ check "notarytool signs in ($NOTARY_DESC)" "set ASC_KEY_PATH/ASC_KEY_ID/ASC_ISSU
     xcrun notarytool history "${NOTARY_AUTH[@]}"
 check "generate_appcast present" "swift package resolve" test -x "$GENERATE_APPCAST"
 
-# Same lookup as build-app.sh, which signs the app with this identity. Needed
-# even for a dry run: the disk image is signed with it too.
-IDENTITY_LINE="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 '"Developer ID Application' || true)"
-[[ -n "$IDENTITY_LINE" ]] || die "no Developer ID Application identity in the keychain; Apple notarizes nothing else"
-IDENTITY_HASH="$(awk '{print $2}' <<<"$IDENTITY_LINE")"
-ok "signing identity: $(sed 's/.*"\(.*\)"/\1/' <<<"$IDENTITY_LINE")"
+# Same rule as build-app.sh (scripts/lib/identity.sh): the team's one
+# Developer ID, by SHA-1; several stop here (set -e) unless DEVELOPER_ID_SHA1
+# picks one. Needed even for a dry run: the disk image is signed with it too.
+source scripts/lib/identity.sh
+IDENTITY="$(developer_id < <(security find-identity -v -p codesigning 2>/dev/null))"
+[[ -n "$IDENTITY" ]] || die "no Developer ID Application identity of team $TEAM_ID in the keychain; Apple notarizes nothing else"
+IDENTITY_HASH="${IDENTITY%% *}"
+ok "signing identity: ${IDENTITY#* } ($IDENTITY_HASH)"
 
 # 2. Build -------------------------------------------------------------------
 
 # build-app.sh embeds and re-signs Sparkle, checks the bundle's shape, and
 # launches the binary (`--version`) before anything is packaged.
-CHRONATO_VERSION="$VERSION" scripts/build-app.sh
-[[ "$(codesign -dv "$APP" 2>&1)" =~ TeamIdentifier=[A-Z0-9]{10} ]] || die "$APP is not signed with a Developer ID"
+# DEVELOPER_ID_SHA1: the app is signed with the identity checked above, or not at all.
+CHRONATO_VERSION="$VERSION" DEVELOPER_ID_SHA1="$IDENTITY_HASH" scripts/build-app.sh
+[[ "$(codesign -dv "$APP" 2>&1)" =~ TeamIdentifier=$TEAM_ID ]] || die "$APP is not signed with a Developer ID of team $TEAM_ID"
 
 # 3. Disk image ----------------------------------------------------------------
 

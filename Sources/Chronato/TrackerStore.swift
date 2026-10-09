@@ -15,8 +15,8 @@ enum Prefs {
     static let lastCustomerId = "lastCustomerId"
     static let lastProjectId = "lastProjectId"
     static let lastActivityId = "lastActivityId"
-    /// Settings tab to show next time the Settings window opens (SettingsTab raw value).
-    static let settingsTab = "settingsTab"
+    /// AppearanceMode raw value: "system" (default), "light" or "dark". Applied live by AppearanceMode.follow().
+    static let appearance = "appearance"
 
     static func register() {
         UserDefaults.standard.register(defaults: [idleMinutes: 10, showCustomerInMenuBar: false, hotKeyEnabled: true])
@@ -607,6 +607,11 @@ final class TrackerStore {
         noteDraft = (entryId, text)
     }
 
+    /// The unsaved note typed for `entryId`, if any (the Note panel reopens with it).
+    func noteDraft(for entryId: Int) -> String? {
+        noteDraft.flatMap { $0.entryId == entryId ? $0.text : nil }
+    }
+
     /// Updates the note of entry `entryId` (default: the running one; it may have
     /// ended meanwhile, e.g. a note committed after a switch), or of the paused
     /// session when nothing runs.
@@ -998,7 +1003,10 @@ final class TrackerStore {
 
     // MARK: Previews / snapshots
 
-    enum PreviewState: String, CaseIterable { case idle, running, paused, away, unconfigured, offline }
+    /// One per row of the menu's state contract (design/chronato-interaction-spec.md §4.3).
+    enum PreviewState: String, CaseIterable {
+        case idle, running, paused, away, awayLong, awayDay, unconfigured, connecting, offline, pendingStop, lastError, refusedAgent, busy
+    }
 
     /// A store filled with fixture data and no network, for `Chronato snapshot`.
     static func preview(_ state: PreviewState) -> TrackerStore {
@@ -1051,23 +1059,50 @@ final class TrackerStore {
             AgentSession(agentName: "claude-code", projectId: 13, activityId: 18, customerName: "In-house", projectName: "Internal",
                          activityName: "Internal work", description: "Refactor billing export", begin: now.addingTimeInterval(-1260)),
         ]
+        func pause(minutesAgo: Double, _ reason: PausedSession.Reason) {
+            let at = now.addingTimeInterval(-minutesAgo * 60)
+            s.paused = PausedSession(projectId: 12, activityId: 3, description: "Call tagging automation", tags: [],
+                                     customerName: "Northwind Traders", projectName: "Ops Dashboard",
+                                     activityName: "Automation", pausedAt: at, reason: reason, workedSeconds: 4380)
+            if reason != .manual { s.awayNotice = AwayNotice(since: at, until: now) }
+        }
+        let offline = ConnectionState.offline("Can't reach Kimai: The Internet connection appears to be offline.")
         switch state {
-        case .running:
+        case .running, .lastError, .busy, .pendingStop:
             s.active = entry(200, 1.3, 0, project: 12, activity: 3, note: "Call tagging automation", running: true)
+            if state == .lastError { s.lastError = "The request timed out. Kimai did not answer within 30 seconds." }
+            if state == .busy { s.isBusy = true }
+            if state == .pendingStop {
+                // An idle auto-pause decided 10 minutes ago while Kimai was unreachable.
+                s.pendingStop = PendingStop(entryId: 200, end: now.addingTimeInterval(-600), reason: .idle)
+                s.connectionState = offline
+            }
         case .paused:
-            s.paused = PausedSession(projectId: 12, activityId: 3, description: "Call tagging automation", tags: [],
-                                     customerName: "Northwind Traders", projectName: "Ops Dashboard",
-                                     activityName: "Automation", pausedAt: now.addingTimeInterval(-600), reason: .manual, workedSeconds: 4380)
+            pause(minutesAgo: 10, .manual)
         case .away:
-            s.paused = PausedSession(projectId: 12, activityId: 3, description: "Call tagging automation", tags: [],
-                                     customerName: "Northwind Traders", projectName: "Ops Dashboard",
-                                     activityName: "Automation", pausedAt: now.addingTimeInterval(-1500), reason: .idle, workedSeconds: 4380)
-            s.awayNotice = AwayNotice(since: now.addingTimeInterval(-1500), until: now)
+            pause(minutesAgo: 25, .idle)
+        case .awayLong:
+            pause(minutesAgo: 310, .sleep)
+        case .awayDay:
+            pause(minutesAgo: 26 * 60, .sleep)
         case .unconfigured:
             s.connection = nil
             s.connectionState = .unconfigured
+        case .connecting:
+            // Launch: only the persisted paused session is known yet.
+            s.me = nil
+            s.connectionState = .connecting
+            s.recent = []
+            s.weekEntries = []
+            s.agentSessions = []
+            pause(minutesAgo: 10, .manual)
         case .offline:
-            s.connectionState = .offline("Can't reach Kimai: The Internet connection appears to be offline.")
+            s.connectionState = offline
+        case .refusedAgent:
+            s.agentSessions.append(
+                AgentSession(agentName: "codex", projectId: 9, activityId: 21, customerName: "Acme Studio", projectName: "Consulting",
+                             activityName: "Development", description: "Order sync retries", begin: now.addingTimeInterval(-7200),
+                             stoppedAt: now.addingTimeInterval(-5400), lastError: "This period is locked. Ask an administrator to unlock it."))
         case .idle:
             break
         }

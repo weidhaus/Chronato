@@ -843,6 +843,13 @@ final class SelfTest {
         let customers = store.startableCustomers
         check("p.customers.recentFirst", customers.recent.map(\.id) == [10, 7] && customers.others.map(\.id) == [12],
               "recent=\(customers.recent.map(\.id)) others=\(customers.others.map(\.id))")
+        // New Timer: the last choice first; every search term must be in a customer, project or activity name.
+        let newTimer = NewTimerModel(store, last: (project: 12, activity: 5))
+        newTimer.query = "nor AUTO"
+        let found = newTimer.results.map(\.id)
+        newTimer.query = "zebra"
+        check("p.newTimer.lastFirstAndSearch", newTimer.combos.first?.id == "12/5" && found == ["12/3"] && newTimer.current == nil,
+              "first=\(newTimer.combos.first?.id ?? "nil") found=\(found) noMatch=\(newTimer.current?.id ?? "nil")")
         // The start form keeps its note and stays open unless the start returns no error.
         try await setOffline(true)
         let failed = await store.start(projectId: 12, activityId: 3, description: "Typed in the form")

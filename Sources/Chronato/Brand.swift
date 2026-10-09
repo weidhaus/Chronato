@@ -4,8 +4,9 @@ import SwiftUI
 /// Chronato's colours and marks. One accent (tomato), graphite and silver
 /// around it; everything else is the system's.
 enum Brand {
-    /// Tomato: running state, primary buttons, the mark's hand.
-    static let accent = Color(red: 0xE5 / 255, green: 0x53 / 255, blue: 0x3D / 255)
+    /// Tomato: running state, primary buttons, the mark's hand. Studio holds the
+    /// tokens and their rules (ink for text, fill for marks).
+    static let accent = Studio.accentFill
     static let graphite = Color(red: 0x1E / 255, green: 0x1F / 255, blue: 0x22 / 255)
     static let silver = Color(red: 0xC9 / 255, green: 0xCC / 255, blue: 0xD1 / 255)
 
@@ -61,7 +62,7 @@ enum Brand {
     }
 }
 
-/// "1:05" (h:mm) for the menu bar, "1:05:09" with seconds for the panel.
+/// "1:05" (h:mm) for the menu bar, "1:05:09" with seconds for the menu's running line.
 enum DurationText {
     static func short(_ seconds: Int) -> String {
         let s = max(0, seconds)

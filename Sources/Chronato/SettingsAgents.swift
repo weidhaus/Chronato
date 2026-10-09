@@ -32,18 +32,9 @@ struct AgentsSettings: View {
 
     var body: some View {
         Form {
-            Section {
-                Text("AI agents on this Mac (Claude Code, Codex, Cursor…) track their own work through Chronato's MCP server. Their time is booked as a separate Kimai user and tagged ai-<name>. Only allow-listed agents with a valid token can book.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             if let otherServer, let current = store.connection?.url {
                 Section {
-                    Label {
-                        Text("These settings were made for \(otherServer.host ?? "another server"). Their Kimai user and activities mean nothing on \(current.host ?? "this server"), so agents can't book until you set them up for it.")
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    }
+                    Problem("These settings were made for \(otherServer.host ?? "another server"). Their Kimai user and activities mean nothing on \(current.host ?? "this server"), so agents can't book until you set them up for it.", isError: false)
                     Button("Set Up for \(current.host ?? "This Server")", action: adopt)
                 }
             }
@@ -62,21 +53,20 @@ struct AgentsSettings: View {
                         update { $0.defaultProjectId = project; $0.defaultActivityId = activity }
                     }
                 }
+            } header: {
+                Footnote("AI agents on this Mac (Claude Code, Codex, Cursor…) track their own work through Chronato's MCP server. Their time is booked as a separate Kimai user and tagged ai\u{2011}<name>. Only allow-listed agents with a valid token can book.")
+                    .padding(.bottom, Studio.Space.s)
             } footer: {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Studio.Space.xs) {
                     if let warning = bookingWarning {
-                        Text(warning).foregroundStyle(.orange)
+                        Problem(warning, isError: false)
                     }
-                    Text("The default activity is used when an agent names no project and has no default of its own.")
-                        .foregroundStyle(.secondary)
+                    Footnote("The default activity is used when an agent names no project and has no default of its own.")
                 }
-                .font(.callout)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 if config.agents.isEmpty {
-                    Text("No agents allowed yet.").foregroundStyle(.secondary)
+                    Text("No agents allowed yet.").foregroundStyle(Studio.textSecondary)
                 }
                 ForEach(config.agents) { agent in
                     row(agent)
@@ -90,20 +80,18 @@ struct AgentsSettings: View {
                 // The first save picks the booking user, so it waits for Kimai's user list.
                 .disabled(store.users.isEmpty || otherServer != nil)
                 if let tagError {
-                    Label { Text(tagError) } icon: { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+                    Problem(tagError, isError: false)
                 }
             } header: {
                 Text("Agents")
             } footer: {
                 if store.users.isEmpty {
-                    Text("Connect to Kimai first (Settings → Connection) to add agents.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    Footnote("Connect to Kimai first (Settings → Connection) to add agents.")
                 }
             }
             if let error, !showingSheet {
                 Section {
-                    Label { Text(error) } icon: { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red) }
+                    Problem(error)
                 }
             }
         }
@@ -121,7 +109,7 @@ struct AgentsSettings: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(agent.name)
-                Text(agent.tag).font(.caption).foregroundStyle(.secondary)
+                Text(agent.tag).font(Studio.Typography.secondary).foregroundStyle(Studio.textSecondary)
             }
             .lineLimit(1)
             .layoutPriority(1)
@@ -134,6 +122,7 @@ struct AgentsSettings: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .tint(Studio.accentInk)
                 .help(agent.enabled ? "Allowed to book time" : "Disabled: its token is refused")
             Menu {
                 Button("New Token…") { regenerate(agent) }
@@ -154,15 +143,13 @@ struct AgentsSettings: View {
         if let issued {
             AgentTokenView(agentName: issued.agentName, token: issued.token) { showingSheet = false }
         } else {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Studio.Space.m) {
                 Text("Add AI Agent").font(.headline)
                 TextField("Name", text: $newName, prompt: Text("Claude Code"))
                     .onSubmit(add)
-                Text("Its entries are tagged ai-\(AIConfig.slug(newName).isEmpty ? "<name>" : AIConfig.slug(newName)).")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Footnote("Its entries are tagged ai-\(AIConfig.slug(newName).isEmpty ? "<name>" : AIConfig.slug(newName)).")
                 if let error {
-                    Text(error).font(.callout).foregroundStyle(.red)
+                    Problem(error)
                 }
                 HStack {
                     Spacer()
@@ -304,24 +291,21 @@ struct AgentTokenView: View {
         bundlePath: Bundle.main.bundlePath, executablePath: Bundle.main.executablePath ?? AgentSessions.installedExecutable)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Studio.Space.m) {
             Text("Token for \(agentName)").font(.headline)
+            // A read-only field: raised, with a hairline edge.
             Text(token)
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
-                .padding(8)
+                .padding(Studio.Space.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-            Label {
-                Text("This token won't be shown again. Copy it now, or a ready-made setup that registers Chronato as an MCP server in the agent's app.")
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            }
-            .font(.callout)
-            .fixedSize(horizontal: false, vertical: true)
+                .background(Studio.raised, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Studio.lineSubtle, lineWidth: 0.5))
+            Problem("This token won't be shown again. Copy it now, or a ready-made setup that registers Chronato as an MCP server in the agent's app.",
+                    isError: false)
             if let warning = executable.warning {
                 Label { Text(warning) } icon: { Image(systemName: "externaldrive.badge.exclamationmark").foregroundStyle(.orange) }
-                    .font(.callout)
+                    .font(Studio.Typography.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
@@ -339,7 +323,7 @@ struct AgentTokenView: View {
                 .fixedSize()
                 Button("Copy Token") { copy(token, as: "Token copied") }
                 if let copied {
-                    Text(copied).font(.callout).foregroundStyle(.secondary)
+                    Text(copied).font(Studio.Typography.secondary).foregroundStyle(Studio.textSecondary)
                 }
                 Spacer()
                 Button("Done", action: done).keyboardShortcut(.defaultAction)

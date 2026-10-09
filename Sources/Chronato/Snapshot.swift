@@ -3,7 +3,8 @@ import ChronatoCore
 import SwiftUI
 
 /// `Chronato snapshot <dir>`: renders the main surfaces with fixture data into
-/// PNGs, light and dark, without showing a window or touching the network.
+/// PNGs, light and dark, and writes the status menu of every preview state as
+/// text (menu-<state>.txt), without showing a window or touching the network.
 /// This is how the UI is checked without clicking around a real desktop.
 enum Snapshot {
     @MainActor static func run(_ args: [String]) {
@@ -17,25 +18,56 @@ enum Snapshot {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
 
+        // The menu, one file per state of the spec's state contract (§4.3), plus an update found.
+        for state in TrackerStore.PreviewState.allCases {
+            writeMenu(MenuBarController(store: .preview(state), statusItem: false), to: dir.appendingPathComponent("menu-\(state.rawValue).txt"))
+        }
+        let updating = MenuBarController(store: .preview(.idle), statusItem: false)
+        updating.availableUpdate = { "1.2.0" }
+        writeMenu(updating, to: dir.appendingPathComponent("menu-updateAvailable.txt"))
+
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             for state in TrackerStore.PreviewState.allCases {
-                let store = TrackerStore.preview(state)
-                render(MenuPanel().environment(store), appearance: appearance, to: dir.appendingPathComponent("panel-\(state.rawValue)-\(name).png"))
+                render(StatusButton(look: StatusLook(.preview(state), showCustomer: false)).padding(6), appearance: appearance,
+                       to: dir.appendingPathComponent("statusitem-\(state.rawValue)-\(name).png"))
             }
-            // A screen too small for the panel: the middle scrolls, totals and footer stay.
-            render(MenuPanel(maxMiddleHeight: 380).environment(TrackerStore.preview(.running)), appearance: appearance,
-                   to: dir.appendingPathComponent("panel-scrolled-\(name).png"))
-            let store = TrackerStore.preview(.running)
-            render(HStack(spacing: 8) { MenuBarLabel().environment(store) }.padding(6),
-                   appearance: appearance, to: dir.appendingPathComponent("menubar-running-\(name).png"))
+            render(StatusButton(look: StatusLook(.preview(.running), showCustomer: true)).padding(6), appearance: appearance,
+                   to: dir.appendingPathComponent("statusitem-running-customer-\(name).png"))
+
+            for state in [TrackerStore.PreviewState.running, .paused] {
+                let store = TrackerStore.preview(state)
+                guard let model = NoteModel(store) else { continue }
+                render(NoteForm(model: model).environment(store), appearance: appearance, to: dir.appendingPathComponent("note-\(state.rawValue)-\(name).png"))
+                if state == .running {
+                    model.error = "The request timed out."
+                    render(NoteForm(model: model).environment(store), appearance: appearance, to: dir.appendingPathComponent("note-error-\(name).png"))
+                }
+            }
+
+            // The fixture's last choice is Weekly sync: it comes first.
+            for (label, state, query) in [("empty", TrackerStore.PreviewState.running, ""), ("search", .running, "nor auto"),
+                                          ("nomatch", .running, "zebra"), ("offline", .offline, "")] {
+                let store = TrackerStore.preview(state)
+                let model = NewTimerModel(store, last: (project: 12, activity: 5))
+                model.query = query
+                render(NewTimerForm(model: model).environment(store).frame(width: 440, height: 400), appearance: appearance,
+                       to: dir.appendingPathComponent("newtimer-\(label)-\(name).png"))
+            }
+
             for tab in SettingsTab.allCases {
-                render(SettingsView(tab: tab).environment(TrackerStore.preview(.idle)), appearance: appearance,
+                render(SettingsWindow.make(store: TrackerStore.preview(.idle), tab: tab), appearance: appearance,
                        to: dir.appendingPathComponent("settings-\(tab.rawValue)-\(name).png"))
             }
-            render(ReportsView(fixture: ReportsView.fixtureEntries()).environment(TrackerStore.preview(.idle)).frame(width: 880, height: 640),
-                   appearance: appearance, to: dir.appendingPathComponent("reports-\(name).png"))
+            renderWindow(ReportsView(fixture: ReportsView.fixtureEntries()).environment(TrackerStore.preview(.idle)),
+                         title: "Chronato Reports", size: CGSize(width: 960, height: 680),
+                         appearance: appearance, to: dir.appendingPathComponent("reports-\(name).png"))
         }
         print("✓ snapshots in \(dir.path)")
+    }
+
+    @MainActor private static func writeMenu(_ controller: MenuBarController, to url: URL) {
+        controller.build()
+        try? (MenuBarController.dump(controller.menu.items) + "\n").write(to: url, atomically: true, encoding: .utf8)
     }
 
     @MainActor static func render<V: View>(_ view: V, appearance: NSAppearance.Name, to url: URL) {
@@ -50,8 +82,7 @@ enum Snapshot {
             host.layoutSubtreeIfNeeded()
         }
         fit()
-        // Let SwiftUI settle (onAppear/task bodies, async layout), then fit again:
-        // measured sizes (the panel's scroll height) arrive only after a layout pass.
+        // Let SwiftUI settle (onAppear/task bodies, async layout), then fit again.
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         fit()
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
@@ -60,4 +91,54 @@ enum Snapshot {
         host.cacheDisplay(in: host.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
+
+    /// A view as its window shows it: titled, with the native toolbar its
+    /// `.toolbar` builds. Rendered offscreen; the window is never ordered in.
+    @MainActor static func renderWindow<V: View>(_ view: V, title: String, size: CGSize, appearance: NSAppearance.Name, to url: URL) {
+        let controller = NSHostingController(rootView: view)
+        controller.sceneBridgingOptions = [.toolbars, .title]
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = title
+        window.appearance = NSAppearance(named: appearance)
+        window.contentViewController = controller
+        window.setContentSize(size)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        // The toolbar's glass only composites on screen. Offscreen it is invisible
+        // on light, but blank white capsules on dark, so dark shows the content only.
+        guard let view = appearance == .aqua ? window.contentView?.superview : window.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    /// A whole window, title bar and toolbar included, never put on screen.
+    @MainActor static func render(_ window: NSWindow, appearance: NSAppearance.Name, to url: URL) {
+        window.appearance = NSAppearance(named: appearance)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        // The selected toolbar item's glass draws as a white block off screen;
+        // the window title names the tab instead.
+        window.toolbar?.selectedItemIdentifier = nil
+        guard let frame = window.contentView?.superview,
+              let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
+        frame.cacheDisplay(in: frame.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        print("\(url.lastPathComponent): \(window.title), \(Int(window.frame.width))×\(Int(window.frame.height))")
+    }
+}
+
+/// The status item's button as the menu bar gets it: same image, title, font.
+private struct StatusButton: NSViewRepresentable {
+    let look: StatusLook
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: nil, action: nil)
+        button.isBordered = false
+        button.imagePosition = .imageLeading
+        button.font = MenuBarController.titleFont
+        look.apply(to: button)
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {}
 }

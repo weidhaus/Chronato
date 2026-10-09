@@ -32,7 +32,7 @@ binary, and calls `start_tracking` / `stop_tracking` around its tasks.
     `stop_tracking` books little time rather than the client's idle hours.
   - A session Kimai refuses to book (for example its project was archived) stays
     in the menu as "Not booked" with Kimai's reason, you get a notification, and
-    Chronato retries every few minutes. Right-click it to discard it.
+    Chronato retries every few minutes. Its submenu has **Discard Session**.
   - A session belongs to the Kimai server it was started on and is never booked
     into another one.
 

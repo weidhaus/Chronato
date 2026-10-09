@@ -11,15 +11,15 @@ import SwiftUI
 ///
 /// Chronato lives in the menu bar and is rarely the active app, so scheduled
 /// checks use Sparkle's gentle reminders: rather than a window popping up over
-/// whatever the user is doing, the menu panel shows a small "Update to x.y.z"
-/// button. Sparkle relaunches the app itself after installing, which is right
+/// whatever the user is doing, the menu shows "Update to x.y.z — Install…".
+/// Sparkle relaunches the app itself after installing, which is right
 /// here: the login item is SMAppService, not a LaunchAgent that would need to
 /// own the new process.
 @MainActor @Observable
 final class Updater: NSObject {
     static let shared = Updater()
 
-    /// Found by a scheduled check and not yet looked at; the menu panel offers it.
+    /// Found by a scheduled check and not yet looked at; the menu offers it.
     private(set) var availableVersion: String?
     /// False until started, and while Sparkle downloads in the background.
     private(set) var canCheckForUpdates = false
@@ -74,7 +74,7 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
 
     /// Sparkle shows a scheduled update itself only when it wants utmost focus
     /// (just launched, or the user was idle) and Chronato is the active app.
-    /// Otherwise the reminder goes into the menu panel.
+    /// Otherwise the reminder goes into the menu.
     func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
         immediateFocus && NSApp.isActive
     }
@@ -96,30 +96,8 @@ extension Updater: @preconcurrency SPUStandardUserDriverDelegate {
 
 // MARK: - UI hooks
 
-/// Menu panel: "Update to x.y.z" once a scheduled check found one; nothing otherwise.
-struct UpdateReminderButton: View {
-    var body: some View {
-        if let version = Updater.shared.availableVersion {
-            Button { Updater.shared.checkForUpdates() } label: {
-                Label("Update to \(version)", systemImage: "arrow.down.circle.fill")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(Brand.accent)
-        }
-    }
-}
-
-/// Menu panel footer: a small "Check for Updates…" icon.
-struct CheckForUpdatesButton: View {
-    var body: some View {
-        Button { Updater.shared.checkForUpdates() } label: {
-            Image(systemName: "arrow.triangle.2.circlepath")
-        }
-        .disabled(!Updater.shared.canCheckForUpdates)
-        .help("Check for Updates…")
-        .accessibilityLabel("Check for Updates")
-    }
-}
+// The status menu has "Check for Updates…", or "Update to x — Install…" once a
+// scheduled check found x (MenuBarController.appBlock).
 
 /// Settings → About. Disabled when the updater is not running (dev builds).
 struct UpdateSettings: View {

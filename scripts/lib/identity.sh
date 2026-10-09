@@ -45,14 +45,15 @@ developer_id() {
         return 1
     fi
     if [[ "$candidates" == *$'\n'* ]]; then
-        local sha rest start best="" best_start=0 tie=0
+        local sha rest start best="" best_start=0 tie=0 unknown=0
         while read -r sha rest; do
             start="$(cert_start "$sha")"
-            (( start > 0 )) || tie=1   # an unreadable date might be the newest
-            if (( start > best_start )); then best="$sha $rest"; best_start=$start
+            (( start > 0 )) || unknown=1   # an unreadable date might be the newest
+            # Only a tie on the NEWEST date is ambiguous; a newer one clears it.
+            if (( start > best_start )); then best="$sha $rest"; best_start=$start; tie=0
             elif (( start == best_start )); then tie=1; fi
         done <<<"$candidates"
-        if [[ -z "$best" || $tie == 1 ]]; then
+        if [[ -z "$best" || $tie == 1 || $unknown == 1 ]]; then
             printf '\033[31m✗ several Developer ID Application identities of team %s and their dates do not tell them apart; set DEVELOPER_ID_SHA1:\033[0m\n%s\n' \
                 "$TEAM_ID" "$(sed 's/^/    /' <<<"$candidates")" >&2
             return 1
@@ -79,7 +80,9 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   6) 4444444444444444444444444444444444444444 \"Developer ID Application: Revoked (5SB3S8ESR3)\" (CSSMERR_TP_CERT_REVOKED)
   7) 5555555555555555555555555555555555555555 \"Developer ID Application: Evil (5SB3S8ESR3) (ABCDE12345)\"
      7 valid identities found"
-    cert_start() { case "$1" in "$A") echo 1789912963 ;; "$B") echo 1791533783 ;; *) echo 0 ;; esac; }
+    D="7777777777777777777777777777777777777777"
+    E="8888888888888888888888888888888888888888"
+    cert_start() { case "$1" in "$A") echo 1789912963 ;; "$B") echo 1791533783 ;; "$D"|"$E") echo 1700000000 ;; *) echo 0 ;; esac; }
     FAILS=0
     expect() { # expect <case> <wanted stdout> <wanted status> <find-identity output>
         local out rc=0
@@ -100,6 +103,13 @@ $LINE_B
 $OTHERS"
     expect "order does not matter" "$B Developer ID Application: New Name (5SB3S8ESR3)" 0 "$LINE_B
 $LINE_A
+$OTHERS"
+    expect "a tie below the newest does not matter" "$B Developer ID Application: New Name (5SB3S8ESR3)" 0 "  8) $D \"Developer ID Application: Twin One (5SB3S8ESR3)\"
+  9) $E \"Developer ID Application: Twin Two (5SB3S8ESR3)\"
+$LINE_B
+$OTHERS"
+    expect "a tie on the newest stops" "" 1 "  8) $D \"Developer ID Application: Twin One (5SB3S8ESR3)\"
+  9) $E \"Developer ID Application: Twin Two (5SB3S8ESR3)\"
 $OTHERS"
     C="6666666666666666666666666666666666666666"
     expect "dates that do not tell them apart stop" "" 1 "$LINE_A

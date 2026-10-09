@@ -87,7 +87,9 @@ open "$(xcrun simctl get_app_container "iPhone 17" com.weidhaus.chronato data)/D
 ## App icon
 
 `swift scripts/make-icon.swift Branding` also writes `Branding/AppIcon-iOS-1024.png`
-(full bleed, no alpha). Copy it to `iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`.
+(full bleed, no alpha). Copy it to `iOS/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`,
+and a 264 px copy to the `Brandmark` image set that onboarding and About show:
+`sips -Z 264 Branding/AppIcon-iOS-1024.png --out iOS/App/Assets.xcassets/Brandmark.imageset/Brandmark.png`.
 
 ## TestFlight
 

@@ -313,12 +313,7 @@ private struct ConnectionSettings: View {
 private struct AboutSettings: View {
     var body: some View {
         VStack(spacing: Studio.Space.s) {
-            ZStack {
-                MarkShape().fill(Studio.textPrimary)
-                MarkShape(hand: true).fill(Studio.accentFill)
-            }
-            .frame(width: 96, height: 96)
-            .accessibilityHidden(true)
+            Brand.mark(size: 96)
             Text("Chronato")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(Studio.textPrimary)
@@ -340,33 +335,5 @@ private struct AboutSettings: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Studio.Space.xxl)
-    }
-}
-
-/// The flat C-stopwatch: ring and crown, or the hand and pivot. Geometry of
-/// Branding/brand.md on its 64-unit grid (master: scripts/make-icon.swift).
-private struct MarkShape: Shape {
-    var hand = false
-
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: 34, y: 28.5)
-        let part: CGPath
-        if hand {
-            let line = CGMutablePath()
-            line.move(to: center)
-            line.addLine(to: CGPoint(x: center.x + 10.5 * cos(.pi / 6), y: center.y + 10.5 * sin(.pi / 6)))
-            part = line.copy(strokingWithWidth: 4, lineCap: .round, lineJoin: .round, miterLimit: 10)
-                .union(CGPath(ellipseIn: CGRect(x: center.x - 3.9, y: center.y - 3.9, width: 7.8, height: 7.8), transform: nil))
-        } else {
-            let arc = CGMutablePath()
-            arc.addArc(center: center, radius: 18.5, startAngle: .pi * 40 / 180, endAngle: .pi * 320 / 180, clockwise: false)
-            part = arc.copy(strokingWithWidth: 7.5, lineCap: .round, lineJoin: .round, miterLimit: 10)
-                .union(CGPath(rect: CGRect(x: center.x - 2.5, y: 47, width: 5, height: 6.85), transform: nil))
-                .union(CGPath(roundedRect: CGRect(x: center.x - 7.5, y: 53.35, width: 15, height: 5.5),
-                              cornerWidth: 2.2, cornerHeight: 2.2, transform: nil))
-        }
-        // The grid's y points up; the view's down.
-        let scale = min(rect.width, rect.height) / 64
-        return Path(part).applying(CGAffineTransform(a: scale, b: 0, c: 0, d: -scale, tx: rect.minX, ty: rect.minY + 64 * scale))
     }
 }

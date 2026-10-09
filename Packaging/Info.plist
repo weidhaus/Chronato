@@ -13,6 +13,9 @@
 	<string>Chronato</string>
 	<key>CFBundleExecutable</key>
 	<string>Chronato</string>
+	<!-- The Icon Composer icon in Assets.car (Branding/Chronato.icon), and the .icns fallback. -->
+	<key>CFBundleIconName</key>
+	<string>Chronato</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>

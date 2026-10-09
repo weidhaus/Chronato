@@ -133,6 +133,15 @@ done
 "${SIGN[@]}" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dv "$APP" 2>&1 | sed 's/^/  /'
+# The picker trusts the certificate's NAME ending in "(TEAM)"; the signature
+# itself says which team it really is. A Developer ID build must be that team's,
+# with the Developer ID requirement (leaf marker 6.1.13) installed copies check.
+if [[ -n "${IDENTITY:-}" ]]; then
+    [[ "$(codesign -dv "$APP" 2>&1)" == *"TeamIdentifier=$TEAM_ID"* ]] || die "$APP is not signed by team $TEAM_ID"
+    DR="$(codesign -d -r- "$APP" 2>&1)"
+    [[ "$DR" == *"1.2.840.113635.100.6.1.13"* && "$DR" == *"subject.OU] = \"$TEAM_ID\""* ]] \
+        || die "$APP's designated requirement does not pin Developer ID and team $TEAM_ID: $DR"
+fi
 
 # The shape a launch depends on (the loop above already proved the framework
 # is there). A bundle without the rpath dies in dyld before main(), yet

@@ -109,13 +109,17 @@ struct ReportsView: View {
                     .disabled(interval.end > Date())
             }
         }
-        ToolbarItem(placement: .principal) {
+        // Period is centred by spacers, not `.principal`: in this AppKit-hosted window SwiftUI
+        // puts a principal item first in the toolbar, which pushes ‹ Today › after it.
+        ToolbarSpacer(.flexible)
+        ToolbarItem {
             Picker("Period", selection: $period) {
                 ForEach(ReportPeriod.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .fixedSize()
         }
+        ToolbarSpacer(.flexible)
         ToolbarItem(placement: .primaryAction) {
             Picker("Scope", selection: $scope) {
                 ForEach(ReportScope.allCases) { Text($0.title).tag($0) }
@@ -381,6 +385,11 @@ private struct ReportBody: View {
     let padding: CGFloat
     @Binding var toggled: Set<String>
     @Binding var selection: String?
+    /// The table gets its rows one update after it is built. Built with them, SwiftUI
+    /// expands customer after customer and AppKit's row-height cache re-enters itself
+    /// measuring the projects ("reentrant operation in its NSTableView delegate");
+    /// inserted in one update, all rows are measured in one go.
+    @State private var appeared = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -555,7 +564,7 @@ private struct ReportBody: View {
                 .alignment(.trailing)
             }
         } rows: {
-            ForEach(report.customers) { customer in
+            ForEach(appeared ? report.customers : []) { customer in
                 let c = Row(id: "c\(customer.id)", line: customer, depth: 0, customerId: customer.id)
                 DisclosureTableRow(c, isExpanded: expanded(c)) {
                     ForEach(customer.children) { project in
@@ -573,6 +582,7 @@ private struct ReportBody: View {
         .tableStyle(.inset)
         .alternatingRowBackgrounds(.disabled)
         .scrollContentBackground(.hidden)
+        .onAppear { appeared = true }
     }
 
     /// Customers start expanded and projects collapsed; `toggled` holds the rows flipped from that.

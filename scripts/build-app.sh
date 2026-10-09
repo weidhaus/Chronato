@@ -10,6 +10,8 @@
 #
 # CHRONATO_VERSION=1.2.0 sets the version instead of the nearest git tag
 # (scripts/release.sh does this). Sparkle.framework is embedded and re-signed.
+# DEVELOPER_ID_SHA1=<SHA-1> picks the identity when the keychain holds several
+# Developer IDs (security find-identity -v -p codesigning lists them).
 #
 # Notarization reads Apple credentials from a notarytool keychain profile,
 # NOTARY_PROFILE (default "weidhaus"). Create one once with
@@ -27,7 +29,7 @@ for arg in "$@"; do
     case "$arg" in
         --notarize) NOTARIZE=1 ;;
         --install) INSTALL=1 ;;
-        -h | --help) sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) sed -n '3,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
     esac
 done
@@ -96,20 +98,21 @@ ok "assembled $APP"
 
 # 3. Sign --------------------------------------------------------------------
 
-# First valid Developer ID. Signed by its SHA-1, not its name: the same
-# certificate in two keychains makes a name ambiguous to codesign.
-# `|| true`: no match must not end the script under `set -e -o pipefail`.
-IDENTITY_LINE="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 '"Developer ID Application' || true)"
-if [[ -n "$IDENTITY_LINE" ]]; then
-    IDENTITY_HASH="$(awk '{print $2}' <<<"$IDENTITY_LINE")"
-    IDENTITY_NAME="$(sed 's/.*"\(.*\)"/\1/' <<<"$IDENTITY_LINE")"
-    bold "→ signing as $IDENTITY_NAME"
+# The team's one Developer ID (scripts/lib/identity.sh, shared with
+# release.sh), signed by its SHA-1, not its name: the same certificate in two
+# keychains makes a name ambiguous to codesign. Several distinct ones stop the
+# build here (set -e) unless DEVELOPER_ID_SHA1 picks one.
+source scripts/lib/identity.sh
+IDENTITY="$(developer_id < <(security find-identity -v -p codesigning 2>/dev/null))"
+if [[ -n "$IDENTITY" ]]; then
+    IDENTITY_HASH="${IDENTITY%% *}"
+    bold "→ signing as ${IDENTITY#* } ($IDENTITY_HASH)"
     # Hardened runtime and a secure timestamp are what notarization requires.
     # No entitlements: Chronato is not sandboxed and needs no exceptions.
     SIGN=(codesign --force --options runtime --timestamp --sign "$IDENTITY_HASH")
 else
     warn ""
-    warn "!!! No \"Developer ID Application\" identity in the keychain: signing AD-HOC."
+    warn "!!! No \"Developer ID Application\" identity of team $TEAM_ID in the keychain: signing AD-HOC."
     warn "!!! Fine on this Mac. Other Macs will refuse to open it, it cannot be"
     warn "!!! notarized, and the Keychain may ask again after every rebuild."
     warn ""
@@ -155,7 +158,7 @@ ok "starts and reports $VERSION"
 # 4. Notarize, staple, package ----------------------------------------------
 
 if (( NOTARIZE )); then
-    [[ -n "$IDENTITY_LINE" ]] || die "notarization needs a Developer ID signature"
+    [[ -n "$IDENTITY" ]] || die "notarization needs a Developer ID signature"
     PROFILE="${NOTARY_PROFILE:-weidhaus}"
     ZIP="dist/$NAME-$VERSION.zip"
     DMG="dist/$NAME-$VERSION.dmg"

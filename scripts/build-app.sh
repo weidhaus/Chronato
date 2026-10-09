@@ -73,7 +73,9 @@ cp Branding/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # (CFBundleIconName). actool also writes a Chronato.icns of its own; the bundle
 # keeps AppIcon.icns (CFBundleIconFile), drawn from the same master.
 ICONS="$(mktemp -d)"
-ACTOOL="$(xcrun actool Branding/Chronato.icon --compile "$ICONS" --platform macosx --minimum-deployment-target 26.0 \
+# Absolute input path: actool hands the job to a shared ibtoold daemon that
+# resolves relative paths against ITS working directory, not this script's.
+ACTOOL="$(xcrun actool "$PWD/Branding/Chronato.icon" --compile "$ICONS" --platform macosx --minimum-deployment-target 26.0 \
     --app-icon Chronato --output-partial-info-plist "$ICONS/partial.plist" --output-format human-readable-text 2>&1)" \
     || die "actool could not compile Branding/Chronato.icon: $ACTOOL"
 [[ -f "$ICONS/Assets.car" ]] || die "actool wrote no Assets.car: $ACTOOL"

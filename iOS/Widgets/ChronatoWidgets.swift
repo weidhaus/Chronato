@@ -67,7 +67,6 @@ struct ChronatoLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ChronatoActivityAttributes.self) { context in
             LiveActivityLockScreenView(attributes: context.attributes, state: context.state)
-                .activitySystemActionForegroundColor(Brand.accent)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -95,7 +94,7 @@ struct ChronatoLiveActivity: Widget {
             } minimal: {
                 IslandMark(isPaused: context.state.isPaused)
             }
-            .keylineTint(Brand.accent)
+            .keylineTint(Studio.accentFill)
         }
     }
 }

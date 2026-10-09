@@ -16,15 +16,17 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // The mark large once; the next thing is the form.
                 Section {
-                    VStack(spacing: 12) {
+                    VStack(spacing: Studio.Space.m) {
                         AppIconImage(size: 88)
                         Text("Welcome to Chronato")
-                            .font(.title.weight(.bold))
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(Studio.textPrimary)
                             .multilineTextAlignment(.center)
                         Text("Start and stop your Kimai timers in two taps. Connect your Kimai to begin.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                            .foregroundStyle(Studio.textSecondary)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -55,35 +57,32 @@ struct OnboardingView: View {
                         }
                         .labelStyle(.iconOnly)
                         .buttonBorderShape(.capsule)
+                        // Neutral: its glyph is white, and white on light tomato ink fails in dark.
+                        .tint(Studio.controlBorder)
                     }
                 } header: {
                     Text("Your Kimai")
                 } footer: {
                     Text("The token stays in this iPhone's Keychain. Chronato talks only to your Kimai server.")
-                }
-
-                if let failure {
-                    Section {
-                        Label(failure, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
+                        .foregroundStyle(Studio.textSecondary)
                 }
 
                 Section {
-                    Button(action: connect) {
-                        HStack(spacing: 8) {
-                            if connecting { ProgressView().tint(.white) }
-                            Text(connecting ? "Connecting…" : "Connect")
-                        }
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
+                    if let failure {
+                        Problem(failure)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    Button(action: connect) {
+                        HStack(spacing: Studio.Space.s) {
+                            Text(connecting ? "Connecting…" : "Connect")
+                            if connecting {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .fontWeight(.semibold)
                     .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty || token.isEmpty || connecting)
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
 
                 Section("Where do I get an API token?") {
                     step(1, "Open Kimai in a browser and sign in.")
@@ -100,7 +99,7 @@ struct OnboardingView: View {
     private func field(icon: String, @ViewBuilder content: () -> some View) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Studio.textSecondary)
                 .frame(width: 22)
                 .accessibilityHidden(true)
             content()
@@ -109,11 +108,11 @@ struct OnboardingView: View {
 
     private func step(_ number: Int, _ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: "\(number).circle.fill")
-                .foregroundStyle(Brand.accent)
+            Image(systemName: "\(number).circle")
+                .foregroundStyle(Studio.textSecondary)
                 .font(.title3)
                 .accessibilityHidden(true)
-            Text(text).font(.subheadline)
+            Text(text).font(.subheadline).foregroundStyle(Studio.textPrimary)
         }
         .accessibilityLabel("Step \(number): \(text)")
     }
@@ -146,7 +145,8 @@ struct OnboardingView: View {
     }
 }
 
-/// The app icon, for onboarding and About (an image set copied from Branding/AppIcon-iOS-1024.png).
+/// The app icon, for onboarding and About (an image set copied from
+/// Branding/AppIcon-iOS-1024.png): the one place the mark is shown large.
 struct AppIconImage: View {
     let size: CGFloat
 

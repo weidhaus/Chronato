@@ -4,12 +4,16 @@ The iOS app: same Kimai account model as the Mac app (server URL + API token in
 the Keychain), start / pause / resume / stop, recent entries, today/week totals.
 It links `ChronatoCore` from the repository root as a local Swift package.
 
+Design: [`design/chronato-ios-spec.md`](../design/chronato-ios-spec.md), the
+iPhone adaptation of the Mac's interaction spec. The Studio tokens are in
+`Shared/Studio.swift`, with the same names and values as the Mac's.
+
 ## Layout
 
 | Folder | Target membership | What |
 |---|---|---|
 | `App/` | Chronato | SwiftUI app: onboarding, Track, Reports, Settings tabs. App icon. |
-| `Shared/` | Chronato + ChronatoWidgets | `PhoneTracker` (the engine), `AppGroup` + `SharedSnapshot`, App Intents, Live Activity attributes and views, widget views, brand colours, `PrivacyInfo.xcprivacy`, AccentColor. |
+| `Shared/` | Chronato + ChronatoWidgets | `PhoneTracker` (the engine), `AppGroup` + `SharedSnapshot`, App Intents, Live Activity attributes and views, widget views, Studio tokens and brand colours, `PrivacyInfo.xcprivacy`, AccentColor (`accentInk`). |
 | `Widgets/` | ChronatoWidgets | Widget extension: the status widget and the Live Activity configurations. |
 | `Config/` | none (build settings point here) | Info.plist additions and entitlements for both targets. |
 
@@ -39,7 +43,7 @@ Launch with fixture data instead of a Kimai server:
 ```sh
 xcrun simctl boot "iPhone 17"
 xcrun simctl install "iPhone 17" <DerivedData>/Build/Products/Debug-iphonesimulator/Chronato.app
-xcrun simctl launch "iPhone 17" com.weidhaus.chronato -ChronatoFixture running   # idle | running | paused | unconfigured
+xcrun simctl launch "iPhone 17" com.weidhaus.chronato -ChronatoFixture running   # idle | running | paused | offline | error | unconfigured
 xcrun simctl io "iPhone 17" screenshot chronato.png
 ```
 
@@ -47,9 +51,15 @@ In Xcode, the shared scheme has `-ChronatoFixture running` under Run →
 Arguments, switched off. Fixture mode makes no network calls and leaves the
 Keychain alone; it still writes the snapshot, so widgets show the same data.
 
-More launch arguments for screenshots: `-ChronatoTab reports` (or `settings`)
-opens that tab, `-reportPeriod month` (`day|week|month|year`) and
-`-reportScope all` (`me|ai|all`) set the Reports tab's remembered choice.
+`offline` is a running timer while Kimai does not answer; `error` is idle with
+a failed action. More launch arguments for screenshots: `-ChronatoTab reports`
+(or `settings`) opens that tab, `-reportPeriod month` (`day|week|month|year`)
+and `-reportScope all` (`me|ai|all`) set the Reports tab's remembered choice,
+`-ChronatoSheet newTimer` (or `note`) opens that sheet on the Track tab, and
+`-appearance dark` (`system|light|dark`) sets Settings → Appearance. In Debug
+builds `-ChronatoScroll bottom` scrolls every list to its end, to see what lies
+below the first screen. `xcrun simctl ui "iPhone 17" appearance dark` switches
+the system appearance.
 
 To check that `ChronatoCore` alone builds for iOS:
 

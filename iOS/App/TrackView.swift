@@ -1,48 +1,40 @@
 import ChronatoCore
 import SwiftUI
 
-/// The Track tab, built for "start or stop in two taps": the running or paused
-/// timer (or, when idle, the start form with the last choice) at the top,
-/// today/week totals, then recent entries that start again with one tap.
+/// The Track tab (design/chronato-ios-spec.md §4): the Mac menu's blocks as a
+/// grouped list. Notices; what runs or is paused, its actions and today's
+/// totals; Recent, one tap to start again; New Timer….
 struct TrackView: View {
     @Environment(PhoneTracker.self) private var tracker
-    /// The start sheet: "Switch to…" and "Change and start" on a recent entry.
-    @State private var sheet: StartChoice?
+    @State private var sheet: TrackSheet?
+    @State private var openedLaunchSheet = false
 
     var body: some View {
         NavigationStack {
             List {
-                Banners()
-                // `.id`: a new entry gets a fresh card (and note field state).
-                if let entry = tracker.active {
-                    Section { RunningCard(entry: entry).id(entry.id) }
-                        .listRowBackground(CardBackground(hex: tracker.work(entry).customerColor))
-                    switchRow
-                } else if let session = tracker.paused {
-                    Section { PausedCard(session: session).id(session.pausedAt) }
-                        .listRowBackground(CardBackground(hex: session.work.customerColor))
-                    switchRow
-                } else {
-                    let choice = StartChoice.remembered(tracker)
-                    // Re-created when the fallback changes (the recent list loads after launch).
-                    Section("Start") { StartForm(choice: choice).id(choice.projectId) }
-                }
-                Section { Totals() }
+                Notices()
+                TimerSection(open: { sheet = $0 })
                 if !tracker.recent.isEmpty {
                     Section {
                         ForEach(tracker.recent) { entry in
-                            RecentRow(entry: entry) { sheet = choice(from: entry) }
+                            RecentRow(entry: entry) { sheet = .newTimer(choice(from: entry)) }
                         }
                     } header: {
                         Text("Recent")
                     } footer: {
-                        Text(tracker.isRunning ? "Tap to switch to an entry. Swipe left to change it first." : "Tap to start an entry again. Swipe left to change it first.")
+                        Text(tracker.isRunning ? "Tap to switch to an entry. Touch and hold to change it first."
+                                               : "Tap to start an entry again. Touch and hold to change it first.")
+                            .foregroundStyle(Studio.textSecondary)
                     }
                 }
+                Section {
+                    Button { sheet = .newTimer(.remembered(tracker)) } label: { CommandLabel("New Timer…", "plus") }
+                        .disabled(!tracker.canAct)
+                }
             }
-            .navigationTitle("Chronato")
+            .navigationTitle("Track")
             .toolbar {
-                if tracker.isBusy || tracker.connectionState == .connecting {
+                if tracker.isBusy {
                     ToolbarItem(placement: .topBarTrailing) { ProgressView() }
                 }
             }
@@ -51,20 +43,26 @@ struct TrackView: View {
                 await tracker.reloadCatalog()
                 await tracker.refresh()
             }
-            .sheet(item: $sheet) { StartSheet(choice: $0) }
+            .sheet(item: $sheet) { sheet in
+                switch sheet {
+                case let .newTimer(choice): NewTimerSheet(choice: choice)
+                case .note: NoteSheet(tracker: tracker)
+                }
+            }
             // Haptics confirm what Kimai accepted (start; stop and pause), or that it failed.
             .sensoryFeedback(trigger: tracker.active?.id) { old, new in
                 new != nil ? .start : (old != nil ? .stop : nil)
             }
             .sensoryFeedback(trigger: tracker.lastError) { _, new in new != nil ? .error : nil }
-        }
-    }
-
-    /// Opens the start form while something runs or is paused.
-    private var switchRow: some View {
-        Section {
-            Button { sheet = .remembered(tracker) } label: {
-                Label("Switch to Another Task…", systemImage: "arrow.left.arrow.right")
+            // `-ChronatoSheet newTimer|note` opens a sheet at launch, for screenshots.
+            .task {
+                guard !openedLaunchSheet else { return }
+                openedLaunchSheet = true
+                switch UserDefaults.standard.string(forKey: "ChronatoSheet") {
+                case "newTimer": sheet = .newTimer(.remembered(tracker))
+                case "note" where tracker.active != nil || tracker.paused != nil: sheet = .note
+                default: break
+                }
             }
         }
     }
@@ -75,135 +73,267 @@ struct TrackView: View {
     }
 }
 
-/// The running/paused card's row background: a thin bar in the customer's colour.
-private struct CardBackground: View {
-    let hex: String?
+enum TrackSheet: Identifiable {
+    case newTimer(StartChoice)
+    case note
 
-    var body: some View {
-        HStack(spacing: 0) {
-            Rectangle().fill(Brand.color(hex: hex) ?? .secondary).frame(width: 5)
-            Color(.secondarySystemGroupedBackground)
+    var id: String {
+        switch self {
+        case let .newTimer(choice): "new-\(choice.id)"
+        case .note: "note"
         }
     }
 }
 
-/// The last error (or the 24 h notice) and the offline state, above everything.
-private struct Banners: View {
+// MARK: - Notices
+
+/// The last error (or the 24 h notice), then connecting or offline: above
+/// everything, as block A of the Mac menu.
+private struct Notices: View {
     @Environment(PhoneTracker.self) private var tracker
 
     var body: some View {
-        if let error = tracker.lastError {
+        let offline: String? = if case let .offline(message) = tracker.connectionState { message } else { nil }
+        if tracker.lastError != nil || offline != nil || tracker.connectionState == .connecting {
             Section {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).accessibilityHidden(true)
-                    Text(error).font(.subheadline)
-                    Spacer(minLength: 0)
-                    Button { tracker.lastError = nil } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                if let error = tracker.lastError {
+                    HStack(alignment: .firstTextBaseline) {
+                        Problem(error)
+                        Spacer(minLength: 0)
+                        Button("Dismiss", systemImage: "xmark.circle.fill") { tracker.lastError = nil }
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Studio.textSecondary)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss")
                 }
-            }
-        }
-        if case let .offline(message) = tracker.connectionState {
-            Section {
-                HStack(spacing: 10) {
-                    Image(systemName: "wifi.slash").foregroundStyle(.orange).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Offline").font(.subheadline.weight(.semibold))
-                        Text(message).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                if tracker.connectionState == .connecting {
+                    HStack(spacing: Studio.Space.s) {
+                        ProgressView()
+                        Text("Connecting to Kimai…").foregroundStyle(Studio.textSecondary)
                     }
-                    Spacer(minLength: 0)
-                    Button("Retry") { Task { await tracker.refresh() } }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                }
+                if let offline {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label {
+                            Text("Kimai is not reachable").foregroundStyle(Studio.textPrimary)
+                        } icon: {
+                            Image(systemName: "wifi.slash").foregroundStyle(.orange)
+                        }
+                        Text(Self.reason(offline))
+                            .font(.subheadline)
+                            .foregroundStyle(Studio.textSecondary)
+                            .lineLimit(3)
+                    }
+                    Button { Task { await tracker.refresh() } } label: { CommandLabel("Try Again", "arrow.clockwise") }
+                        .disabled(tracker.isBusy)
                 }
             } footer: {
-                Text("Showing what Chronato knew last.")
+                if offline != nil, tracker.active != nil || tracker.paused != nil {
+                    Text("Below is what Chronato knew last.").foregroundStyle(Studio.textSecondary)
+                }
             }
         }
     }
+
+    /// "The Internet connection appears to be offline." from "Can't reach Kimai: …":
+    /// the line above already says it.
+    private static func reason(_ message: String) -> String {
+        let prefix = "Can't reach Kimai: "
+        return message.hasPrefix(prefix) ? String(message.dropFirst(prefix.count)) : message
+    }
 }
 
-/// One recent combination: tap starts it again (stopping whatever runs).
-private struct RecentRow: View {
+// MARK: - Timer
+
+/// Block B and C of the Mac menu: what runs or is paused, its time, its
+/// actions; Today · This week below.
+private struct TimerSection: View {
     @Environment(PhoneTracker.self) private var tracker
-    let entry: KimaiTimesheet
-    /// Opens the start sheet with this entry, to change it before starting.
-    let edit: () -> Void
+    let open: (TrackSheet) -> Void
+    /// The large time, scaled with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 52
 
     var body: some View {
-        let work = tracker.work(entry)
-        Button(action: start) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(work.projectName) · \(work.activityName)")
-                        .lineLimit(2)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Dot(hex: work.customerColor)
-                        Text(work.customerName)
+        if let entry = tracker.active {
+            let work = tracker.work(entry)
+            Section {
+                VStack(alignment: .leading, spacing: Studio.Space.xs) {
+                    WorkLines(work: work)
+                    // Ticks by itself; no per-second state in the tracker.
+                    Text(timerInterval: entry.begin...Date.distantFuture, countsDown: false)
+                        .font(.system(size: heroSize, weight: .light).monospacedDigit())
+                        .foregroundStyle(Studio.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .padding(.top, Studio.Space.s)
+                    HStack(spacing: 6) {
+                        RunningDot()
+                        Text("Running since \(sinceText(entry.begin))")
                     }
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    if let note = work.note, !note.isEmpty {
-                        Text(note).font(.subheadline).foregroundStyle(.tertiary).lineLimit(1)
-                    }
+                    .foregroundStyle(Studio.textSecondary)
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "play.circle.fill")
-                    .font(.title)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Brand.accent)
-                    .accessibilityHidden(true)
+                .padding(.vertical, Studio.Space.xs)
+                Button { Task { await tracker.pause() } } label: { CommandLabel("Pause", "pause") }
+                    .disabled(!tracker.canAct)
+                Button { Task { await tracker.stop() } } label: { CommandLabel("Stop", "stop") }
+                    .disabled(!tracker.canAct)
+                noteButton(work.note)
+            } footer: {
+                Totals()
             }
-            .contentShape(Rectangle())
+        } else if let session = tracker.paused {
+            let since = sinceText(session.pausedAt)
+            Section {
+                VStack(alignment: .leading, spacing: Studio.Space.xs) {
+                    WorkLines(work: session.work)
+                    HStack(alignment: .firstTextBaseline, spacing: Studio.Space.s) {
+                        Text(DurationText.short(session.workedSeconds))
+                            .font(.system(size: heroSize, weight: .light).monospacedDigit())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                        Text("worked before").font(.subheadline)
+                    }
+                    .foregroundStyle(Studio.textSecondary)
+                    .padding(.top, Studio.Space.s)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(DurationText.spoken(session.workedSeconds)) worked before")
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "pause.fill").font(.caption2).accessibilityHidden(true)
+                        Text("Paused since \(since)")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(Studio.textSecondary)
+                }
+                .padding(.vertical, Studio.Space.xs)
+                // No away state on iPhone: there is no idle signal (spec §4.3).
+                Button { Task { await tracker.resume() } } label: { CommandLabel("Resume", "play") }
+                    .disabled(!tracker.canAct)
+                // Stop forgets the paused timer; Kimai has nothing to stop.
+                Button { Task { await tracker.stop() } } label: { CommandLabel("Stop", "stop") }
+                    .disabled(tracker.isBusy)
+                noteButton(session.work.note)
+            } footer: {
+                VStack(alignment: .leading, spacing: Studio.Space.s) {
+                    Totals()
+                    Text("Kimai has no pause: the entry ended at \(since). Resume starts a new one with the same customer, project, activity and note.")
+                }
+                .foregroundStyle(Studio.textSecondary)
+            }
+        } else if tracker.connectionState != .connecting {
+            // At launch nothing is known yet: no "Not running" and no 0:00 rather than a guess.
+            Section {
+                Text("Not running").foregroundStyle(Studio.textPrimary)
+            } footer: {
+                Totals()
+            }
         }
-        .foregroundStyle(.primary)
-        .disabled(tracker.isBusy)
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button(action: start) { Label("Start", systemImage: "play.fill") }.tint(Brand.accent)
-        }
-        .swipeActions(edge: .trailing) {
-            Button(action: edit) { Label("Change", systemImage: "slider.horizontal.3") }.tint(.indigo)
-        }
-        .contextMenu {
-            Button(action: start) { Label("Start", systemImage: "play.fill") }
-            Button(action: edit) { Label("Change and Start…", systemImage: "slider.horizontal.3") }
-        }
-        .accessibilityLabel("\(work.projectName), \(work.activityName), \(work.customerName)\(work.note.map { ", \($0)" } ?? "")")
-        .accessibilityHint(tracker.isRunning ? "Switches the timer to this entry" : "Starts a timer for this entry")
-        .accessibilityAction(named: "Change and Start", edit)
     }
 
-    private func start() { Task { await tracker.startAgain(entry) } }
+    private func noteButton(_ note: String?) -> some View {
+        Button { open(.note) } label: { CommandLabel((note ?? "").isEmpty ? "Add Note…" : "Edit Note…", "pencil") }
+            .disabled(tracker.isBusy || (tracker.active != nil && !tracker.canAct))
+    }
 }
 
-/// Today and this week, mine, refreshed every minute.
+/// A command row, read like a Mac menu item: the title in primary ink, the
+/// symbol in the tint. (Tomato text on every row would read as destructive.)
+private struct CommandLabel: View {
+    @Environment(\.isEnabled) private var isEnabled
+    let title: String
+    let systemImage: String
+
+    init(_ title: String, _ systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        Label {
+            Text(title).foregroundStyle(Studio.textPrimary)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(.tint)
+        }
+        .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+/// "Activity · Project", then the customer (with its colour) and the note.
+struct WorkLines: View {
+    let work: Work
+    var titleFont = Studio.Typography.heading
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(work.activityName) · \(work.projectName)")
+                .font(titleFont)
+                .foregroundStyle(Studio.textPrimary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Dot(hex: work.customerColor)
+                Text([work.customerName, work.note ?? ""].filter { !$0.isEmpty }.joined(separator: " — "))
+            }
+            .font(.subheadline)
+            .foregroundStyle(Studio.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "Today 3:05 · This week 12:40", mine, refreshed every minute.
 private struct Totals: View {
     @Environment(PhoneTracker.self) private var tracker
 
     var body: some View {
         TimelineView(.everyMinute) { context in
-            HStack(spacing: 0) {
-                total("Today", tracker.todaySeconds(at: context.date))
-                Divider().padding(.vertical, 4)
-                total("This Week", tracker.weekSeconds(at: context.date)).padding(.leading, 16)
-            }
+            let today = tracker.todaySeconds(at: context.date)
+            let week = tracker.weekSeconds(at: context.date)
+            Text("Today \(DurationText.short(today)) · This week \(DurationText.short(week))")
+                .monospacedDigit()
+                .foregroundStyle(Studio.textSecondary)
+                .accessibilityLabel("Today \(DurationText.spoken(today)). This week \(DurationText.spoken(week)).")
         }
+    }
+}
+
+/// "13:02" today, "Fri, 9 Oct, 17:30" for another day, as on the Mac.
+func sinceText(_ date: Date) -> String {
+    Calendar.current.isDateInToday(date)
+        ? date.formatted(date: .omitted, time: .shortened)
+        : date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+}
+
+// MARK: - Recent
+
+/// One recent combination: a tap starts it again (Kimai stops whatever runs).
+private struct RecentRow: View {
+    @Environment(PhoneTracker.self) private var tracker
+    let entry: KimaiTimesheet
+    /// Opens New Timer with this entry, to change it before starting.
+    let change: () -> Void
+
+    var body: some View {
+        let work = tracker.work(entry)
+        let verb = tracker.isRunning ? "Switch To" : "Start"
+        Button(action: start) {
+            HStack(spacing: Studio.Space.m) {
+                WorkLines(work: work, titleFont: Studio.Typography.body)
+                Spacer(minLength: Studio.Space.s)
+                Image(systemName: "play.circle")
+                    .font(.title2)
+                    .foregroundStyle(Studio.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .opacity(tracker.canAct ? 1 : 0.4)
+            .contentShape(Rectangle())
+        }
+        .disabled(!tracker.canAct)
+        .contextMenu {
+            Button(verb, systemImage: "play", action: start)
+            Button("Change and Start…", systemImage: "slider.horizontal.3", action: change)
+        }
+        .accessibilityHint(tracker.isRunning ? "Switches the timer to this entry" : "Starts a timer for this entry")
+        .accessibilityAction(named: "Change and Start", change)
     }
 
-    private func total(_ title: String, _ seconds: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.subheadline).foregroundStyle(.secondary)
-            Text(DurationText.short(seconds))
-                .font(.title2.weight(.semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(DurationText.spoken(seconds))
-    }
+    private func start() { Task { await tracker.startAgain(entry) } }
 }

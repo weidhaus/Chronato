@@ -90,6 +90,10 @@ enum LiveActivitySync {
 
 // MARK: - Views (shared so the app's widget gallery can render them)
 
+// Studio on the Lock Screen and in the Dynamic Island (spec §9): the system's
+// material and hierarchical text styles, neutral buttons, and tomato only for
+// "running": the dot beside the time and the island's mark.
+
 /// Lock Screen and banner: what runs, the time, Pause/Resume and Stop.
 struct LiveActivityLockScreenView: View {
     let attributes: ChronatoActivityAttributes
@@ -100,7 +104,7 @@ struct LiveActivityLockScreenView: View {
             HStack(alignment: .top, spacing: 12) {
                 ActivityNames(attributes: attributes, note: state.note)
                 Spacer(minLength: 0)
-                ActivityElapsed(state: state, size: 30)
+                ActivityElapsed(state: state, size: 28)
             }
             ActivityButtons(isPaused: state.isPaused)
         }
@@ -108,8 +112,8 @@ struct LiveActivityLockScreenView: View {
     }
 }
 
-/// "Customer · Project" over the activity, then the note. The Dynamic Island
-/// shows the customer in its own region and "Project · Activity" here.
+/// "Activity · Project", then the customer and the note, as in the app and
+/// the Mac menu. The Dynamic Island shows the customer in its own region.
 struct ActivityNames: View {
     let attributes: ChronatoActivityAttributes
     let note: String?
@@ -117,19 +121,15 @@ struct ActivityNames: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            if showsCustomer {
+            Text("\(attributes.activityName) · \(attributes.projectName)").font(.headline)
+            let second = [showsCustomer ? attributes.customerName : "", note ?? ""].filter { !$0.isEmpty }.joined(separator: " — ")
+            if !second.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Dot(hex: attributes.customerColor)
-                    Text("\(attributes.customerName) · \(attributes.projectName)")
+                    if showsCustomer { Dot(hex: attributes.customerColor) }
+                    Text(second)
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                Text(attributes.activityName).font(.headline)
-            } else {
-                Text("\(attributes.projectName) · \(attributes.activityName)").font(.headline)
-            }
-            if let note, !note.isEmpty {
-                Text(note).font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .lineLimit(1)
@@ -137,7 +137,7 @@ struct ActivityNames: View {
     }
 }
 
-/// The ticking time, or "Paused" with the time worked before the break.
+/// The ticking time beside the tomato dot, or "Paused" over the time worked before.
 struct ActivityElapsed: View {
     let state: ChronatoActivityAttributes.ContentState
     let size: CGFloat
@@ -149,27 +149,28 @@ struct ActivityElapsed: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Text(DurationText.short(state.workedSeconds))
-                    .font(.system(size: size * 0.8, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .font(.system(size: size * 0.8, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Paused after \(DurationText.spoken(state.workedSeconds))")
+            .accessibilityLabel("Paused, \(DurationText.spoken(state.workedSeconds)) worked before")
         } else {
-            Text(timerInterval: state.begin...Date.distantFuture, countsDown: false)
-                .font(.system(size: size, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(Brand.accent)
-                // A timer Text claims all the width it may get; this keeps it to "0:00:00".
-                .frame(maxWidth: size * 4.2, alignment: .trailing)
-                .accessibilityLabel("Running since \(state.begin.formatted(date: .omitted, time: .shortened))")
+            HStack(spacing: 6) {
+                RunningDot()
+                Text(timerInterval: state.begin...Date.distantFuture, countsDown: false)
+                    .font(.system(size: size, weight: .semibold).monospacedDigit())
+                    .multilineTextAlignment(.trailing)
+                    // A timer Text claims all the width it may get; this keeps it to "0:00:00".
+                    .frame(maxWidth: size * 4, alignment: .trailing)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Running since \(state.begin.formatted(date: .omitted, time: .shortened))")
         }
     }
 }
 
-/// Pause (or Resume) and Stop, as in the app's timer card: the primary action
-/// tomato, the other gray (tomato text on a pale tomato fill reads poorly). The intents are
-/// LiveActivityIntents: they run in the app's process, on its tracker.
+/// Pause (or Resume) and Stop, neutral as in the app: no tomato fills. The
+/// intents are LiveActivityIntents: they run in the app's process, on its tracker.
 struct ActivityButtons: View {
     let isPaused: Bool
 
@@ -179,37 +180,37 @@ struct ActivityButtons: View {
                 Button(intent: ResumeTrackingIntent()) {
                     Label("Resume", systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                Button(intent: StopTrackingIntent()) {
-                    Label("Stop", systemImage: "stop.fill").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(.primary)
             } else {
                 Button(intent: PauseTrackingIntent()) {
                     Label("Pause", systemImage: "pause.fill").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .tint(.primary)
-                Button(intent: StopTrackingIntent()) {
-                    Label("Stop", systemImage: "stop.fill").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
+            }
+            Button(intent: StopTrackingIntent()) {
+                Label("Stop", systemImage: "stop.fill").frame(maxWidth: .infinity)
             }
         }
+        .buttonStyle(.bordered)
+        .tint(.primary)
         .font(.subheadline.weight(.semibold))
-        .tint(Brand.accent)
     }
 }
 
-/// Dynamic Island compact leading and minimal: the mark, a pause sign when paused.
+/// Dynamic Island compact leading, minimal and expanded: the mark while
+/// running (its dot the tomato), a grey pause symbol when paused.
 struct IslandMark: View {
     let isPaused: Bool
+    var size: CGFloat = 20
 
     var body: some View {
-        Image(systemName: isPaused ? "pause.circle.fill" : "stopwatch.fill")
-            .foregroundStyle(Brand.accent)
-            .accessibilityLabel(isPaused ? "Chronato, paused" : "Chronato, running")
+        Group {
+            if isPaused {
+                Image(systemName: "pause.fill").foregroundStyle(.secondary)
+            } else {
+                Mark().frame(width: size, height: size)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isPaused ? "Chronato, paused" : "Chronato, running")
     }
 }
 
@@ -223,12 +224,11 @@ struct IslandCompactTime: View {
                 Text(DurationText.short(state.workedSeconds)).foregroundStyle(.secondary)
             } else {
                 Text(timerInterval: state.begin...Date.distantFuture, countsDown: false)
-                    .foregroundStyle(Brand.accent)
             }
         }
-        .monospacedDigit()
+        .font(.subheadline.weight(.semibold).monospacedDigit())
         .multilineTextAlignment(.trailing)
         // Room for "0:00:00"; a timer Text would otherwise push into the camera.
-        .frame(width: 58, alignment: .trailing)
+        .frame(width: 60, alignment: .trailing)
     }
 }

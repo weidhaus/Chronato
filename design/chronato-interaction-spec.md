@@ -16,7 +16,7 @@ Design handoff · 9 October 2026. Chronato's adaptation of the Meetfacts + HoldF
 
 ## 2. Identity and colour
 
-**Mark:** the C-stopwatch (`Branding/brand.md`). The status item uses `Brand.menuBarGlyph(running:)`, an 18 pt template image: idle is ring and crown; running is heavier, with the hand and pivot, so the state reads without colour. The menu-bar glyph is never tinted. About shows the flat mark at 96 pt: ring and crown in `textPrimary`, hand and pivot in `accentFill`.
+**Mark:** Progress C (`Branding/brand.md`): a ring cut into an arc, the time tracked, and a dot on the same circle, now. The status item uses `Brand.menuBarGlyph(running:)`, an 18 pt template image: idle is a thin closed track with the dot set into it (a dial at rest, never a spinner); running fills the track to the heavy C, so the state reads without colour. Paused is the idle glyph with a pause badge. The menu-bar glyph is never tinted. About shows the flat mark, `Brand.mark(size: 96)`: the arc in `textPrimary`, the dot in `accentFill`.
 
 **Tokens** (`Studio.swift`). Surfaces, text and lines are Meetfacts' and HoldFn's names and values, unchanged. Only the accent is Chronato's.
 
@@ -52,7 +52,7 @@ Design handoff · 9 October 2026. Chronato's adaptation of the Meetfacts + HoldF
 
 These are arithmetic checks of token pairs, not of rendered, composited pixels; verify the rendered states (§12).
 
-**The accent is allowed for:** the primary action of a panel or window (§5, §6, Settings → Connect); the windows' `.tint(Studio.accentInk)` (focus, toggles, selection emphasis); "now" markers in windows (the current period's axis label in Reports, an 8 pt `accentFill` dot beside the word *Running*); the hand of the mark in About.
+**The accent is allowed for:** the primary action of a panel or window (§5, §6, Settings → Connect); the windows' `.tint(Studio.accentInk)` (focus, toggles, selection emphasis); "now" markers in windows (the current period's axis label in Reports, an 8 pt `accentFill` dot beside the word *Running*); the dot of the mark in About.
 
 **Not allowed:** anything in the menu or the menu bar (system-drawn and template); large fills and backgrounds; chart bars; warnings; errors; decoration.
 
@@ -313,7 +313,7 @@ With Reduce Motion (`accessibilityReduceMotion`) every one of these is immediate
 
 - The status item's label follows the state (§3); menu titles read as words — no "●", "⚠" or "⏸" characters in titles (VoiceOver reads them aloud); symbols are images.
 - Informative menu lines and all window text meet 4.5:1, essential non-text 3:1 (§2); nothing essential sits in the dimmed disabled colour.
-- Colour is never the only cue: customer names beside dots, errors with symbol and words, running shown by the glyph's hand and the word *Running*.
+- Colour is never the only cue: customer names beside dots, errors with symbol and words, running shown by the glyph's heavy C and the word *Running*.
 - Everything works by keyboard: native menu navigation and type-select; both panels keyboard-first; Reports toolbar shortcuts and the outline table; Full Keyboard Access reaches every control.
 - Increase Contrast strengthens tile borders to `controlBorder`; Reduce Transparency needs nothing (Studio surfaces are opaque); Reduce Motion as §10.
 
@@ -350,4 +350,4 @@ Accepted when:
 - `Sources/Chronato/NotePanel.swift`, `NewTimerPanel.swift` (new) — §5, §6.
 - `Sources/Chronato/ReportsView.swift` — §8. `SettingsView.swift`, `SettingsAgents.swift` — §9. `Updater.swift` — the menu's update item replaces `UpdateReminderButton`; Check for Updates… stays in About (`UpdateSettings`).
 - `Sources/Chronato/Snapshot.swift` — §12 renders and menu dumps.
-- `Sources/Chronato/Brand.swift` — `Brand.accent` forwards to `Studio.accentFill`; the flat mark for About is drawn from `Branding/brand.md`'s construction.
+- `Sources/Chronato/Brand.swift` — `Brand.accent` forwards to `Studio.accentFill`; `MarkRing` (`Sources/ChronatoCore/Mark.swift`, shared with the iPhone app) holds the mark from `Branding/brand.md`'s construction: `Brand.mark(size:)` for About and the menu-bar glyph.

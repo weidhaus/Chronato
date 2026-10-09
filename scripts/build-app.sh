@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds dist/Chronato.app: Apple-silicon-only (arm64) release binary, Info.plist stamped with
-# the git version, the app icon, and a Developer ID signature.
+# the git version, the app icon (Icon Composer + .icns fallback), and a Developer ID signature.
 #
 #   scripts/build-app.sh              build and sign
 #   scripts/build-app.sh --notarize   … then notarize, staple, and write
@@ -69,6 +69,16 @@ cp "$BIN" "$APP/Contents/MacOS/$NAME"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" Packaging/Info.plist > "$APP/Contents/Info.plist"
 plutil -lint -s "$APP/Contents/Info.plist" || die "Info.plist is invalid"
 cp Branding/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# The macOS 26 icon: the Icon Composer document compiled into Assets.car
+# (CFBundleIconName). actool also writes a Chronato.icns of its own; the bundle
+# keeps AppIcon.icns (CFBundleIconFile), drawn from the same master.
+ICONS="$(mktemp -d)"
+ACTOOL="$(xcrun actool Branding/Chronato.icon --compile "$ICONS" --platform macosx --minimum-deployment-target 26.0 \
+    --app-icon Chronato --output-partial-info-plist "$ICONS/partial.plist" --output-format human-readable-text 2>&1)" \
+    || die "actool could not compile Branding/Chronato.icon: $ACTOOL"
+[[ -f "$ICONS/Assets.car" ]] || die "actool wrote no Assets.car: $ACTOOL"
+cp "$ICONS/Assets.car" "$APP/Contents/Resources/Assets.car"
+rm -rf "$ICONS"
 
 # Sparkle is a dynamic framework the binary loads through @rpath. SwiftPM
 # leaves it beside the binary; the bundle carries it in Contents/Frameworks,

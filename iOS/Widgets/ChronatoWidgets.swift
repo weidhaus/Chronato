@@ -67,11 +67,10 @@ struct ChronatoLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ChronatoActivityAttributes.self) { context in
             LiveActivityLockScreenView(attributes: context.attributes, state: context.state)
-                .activitySystemActionForegroundColor(Brand.accent)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    IslandMark(isPaused: context.state.isPaused).font(.title2).padding(.leading, 4)
+                    IslandMark(isPaused: context.state.isPaused, size: 26).font(.title2).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     ActivityElapsed(state: context.state, size: 26).padding(.trailing, 4)
@@ -95,7 +94,7 @@ struct ChronatoLiveActivity: Widget {
             } minimal: {
                 IslandMark(isPaused: context.state.isPaused)
             }
-            .keylineTint(Brand.accent)
+            .keylineTint(Studio.accentFill)
         }
     }
 }

@@ -1,56 +1,43 @@
 import AppKit
+import ChronatoCore
 import SwiftUI
 
 /// Chronato's colours and marks. One accent (tomato), graphite and silver
 /// around it; everything else is the system's.
 enum Brand {
-    /// Tomato: running state, primary buttons, the mark's hand. Studio holds the
+    /// Tomato: running state, primary buttons, the mark's dot. Studio holds the
     /// tokens and their rules (ink for text, fill for marks).
     static let accent = Studio.accentFill
     static let graphite = Color(red: 0x1E / 255, green: 0x1F / 255, blue: 0x22 / 255)
     static let silver = Color(red: 0xC9 / 255, green: 0xCC / 255, blue: 0xD1 / 255)
 
-    /// 18 pt template image for the menu bar: the C-stopwatch mark, redrawn
-    /// for this size (the 64-unit master lives in scripts/make-icon.swift).
-    /// Idle is a light ring and crown; running thickens them and adds the hand
-    /// and pivot, so the state reads at a glance without colour.
+    /// 18 pt template image for the menu bar, an optical redraw of the mark.
+    /// Idle is a thin closed track with the dot set into it, a dial at rest;
+    /// running fills the track to the heavy C. A different shape and weight,
+    /// so the state reads at a glance without colour, at 1x too.
     /// The handler is `@Sendable` because AppKit calls it on whatever thread
     /// draws the image; otherwise Swift 6 pins it to the main actor and traps.
     @MainActor static func menuBarGlyph(running: Bool) -> NSImage {
+        let ring = MarkRing.glyph(running: running)
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { @Sendable _ in
-            let weight: CGFloat = running ? 2.1 : 1.6
-            let center = CGPoint(x: 9.6, y: 7.6)
-            let radius: CGFloat = 5.5
             NSColor.black.set()
-
-            // Ring open on the right like a C (gap ±40°, as in the master).
-            let ring = NSBezierPath()
-            ring.appendArc(withCenter: center, radius: radius, startAngle: 40, endAngle: 320)
-            ring.lineWidth = weight
-            ring.lineCapStyle = .round
-            ring.stroke()
-
-            // Crown: a stem up from the ring to a wider button.
-            let buttonY = center.y + radius + weight / 2 + 0.7
-            NSBezierPath(rect: NSRect(x: center.x - weight * 0.4, y: center.y + radius, width: weight * 0.8, height: buttonY - center.y - radius + 0.2)).fill()
-            let button = NSRect(x: center.x - 2.3, y: buttonY, width: 4.6, height: weight * 0.9)
-            NSBezierPath(roundedRect: button, xRadius: button.height * 0.4, yRadius: button.height * 0.4).fill()
-
-            if running {
-                // Hand to 2 o'clock and the pivot dot.
-                let hand = NSBezierPath()
-                hand.move(to: center)
-                hand.line(to: CGPoint(x: center.x + 2.8 * cos(.pi / 6), y: center.y + 2.8 * sin(.pi / 6)))
-                hand.lineWidth = 1.6
-                hand.lineCapStyle = .round
-                hand.stroke()
-                NSBezierPath(ovalIn: NSRect(x: center.x - 1.4, y: center.y - 1.4, width: 2.8, height: 2.8)).fill()
-            }
+            NSBezierPath(cgPath: ring.arc).fill()
+            NSBezierPath(cgPath: ring.dot).fill()
             return true
         }
         image.isTemplate = true
         image.accessibilityDescription = running ? "Chronato, timer running" : "Chronato"
         return image
+    }
+
+    /// The flat mark (Settings → About): the arc in the text colour, the dot tomato.
+    static func mark(size: CGFloat) -> some View {
+        ZStack {
+            MarkShape(dot: false).fill(Studio.textPrimary)
+            MarkShape(dot: true).fill(Studio.accentFill)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 
     /// Kimai colours come as "#RRGGBB".
@@ -59,6 +46,17 @@ enum Brand {
         s.removeFirst()
         guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
         return Color(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)
+    }
+}
+
+/// One piece of the master, scaled into the view (whose y points down).
+private struct MarkShape: Shape {
+    let dot: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 64
+        let part = dot ? MarkRing.master.dot : MarkRing.master.arc
+        return Path(part).applying(CGAffineTransform(a: scale, b: 0, c: 0, d: -scale, tx: rect.minX, ty: rect.minY + 64 * scale))
     }
 }
 

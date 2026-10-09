@@ -2,11 +2,13 @@ import ChronatoCore
 import Foundation
 import Observation
 
-/// Standard-defaults keys: the start form remembers the last choice (same keys as the Mac).
+/// Standard-defaults keys (same keys as the Mac): New Timer remembers the last
+/// choice; Settings → Appearance.
 enum Prefs {
     static let lastCustomerId = "lastCustomerId"
     static let lastProjectId = "lastProjectId"
     static let lastActivityId = "lastActivityId"
+    static let appearance = "appearance"
 }
 
 /// The iPhone app's single source of truth, the counterpart of the Mac's
@@ -100,6 +102,8 @@ final class PhoneTracker {
     }
     var kimaiTimeZone: TimeZone { me?.timezone.flatMap(TimeZone.init(identifier:)) ?? .current }
     var isRunning: Bool { active != nil }
+    /// Kimai answers and nothing is in flight: what the timer actions need.
+    var canAct: Bool { connectionState == .online && !isBusy }
     /// Calendar in the Kimai user's time zone and first weekday (as the Reports use it).
     var calendar: Calendar {
         var c = Calendar(identifier: .gregorian)
@@ -461,7 +465,8 @@ final class PhoneTracker {
 
     // MARK: Fixtures
 
-    enum Fixture: String, CaseIterable { case idle, running, paused, unconfigured }
+    /// `offline`: running, then Kimai stopped answering. `error`: idle with a failed action.
+    enum Fixture: String, CaseIterable { case idle, running, paused, unconfigured, offline, error }
 
     /// Fictional data and no network, for `-ChronatoFixture <state>` and previews.
     /// Its snapshot still goes to the App Group, so widgets show the same data.
@@ -509,14 +514,17 @@ final class PhoneTracker {
         ]
         t.weekEntries = [entry(101, 3, 95, project: 12, activity: 3), entry(102, 26, 60, project: 12, activity: 5)]
         switch state {
-        case .running:
+        case .running, .offline:
             t.active = entry(200, 1.3, 0, project: 12, activity: 3, note: "Call tagging automation", running: true)
+            if state == .offline { t.connectionState = .offline("Can't reach Kimai: The Internet connection appears to be offline.") }
         case .paused:
             let work = t.work(entry(200, 1.4, 73, project: 12, activity: 3, note: "Call tagging automation"))
             t.paused = PausedSession(work: work, pausedAt: now.addingTimeInterval(-600), workedSeconds: 4380)
         case .unconfigured:
             t.connection = nil
             t.connectionState = .unconfigured
+        case .error:
+            t.lastError = "The request timed out."
         case .idle:
             break
         }

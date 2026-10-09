@@ -2,10 +2,11 @@ import Charts
 import ChronatoCore
 import SwiftUI
 
-/// The Reports tab: hours per customer by day, week, month or year, for me,
-/// the AI agents or everyone. Same data and maths as the Mac's Reports window
-/// (Sources/Chronato/ReportsView.swift): KimaiClient.timesheets(user: "all")
-/// (own entries only when Kimai answers 403) → Report.build.
+/// The Reports tab (spec §7): hours per customer by day, week, month or year,
+/// for me, the AI agents or everyone, restrained like the Mac's Reports
+/// window. Same data and maths (Sources/Chronato/ReportsView.swift):
+/// KimaiClient.timesheets(user: "all") (own entries only when Kimai answers
+/// 403) → Report.build.
 struct ReportsTab: View {
     @Environment(PhoneTracker.self) private var tracker
     /// Remembered between launches (and settable with `-reportPeriod month` for screenshots).
@@ -34,9 +35,17 @@ struct ReportsTab: View {
         }
         NavigationStack {
             List {
-                Section { header(interval) }
+                Section {
+                    Picker("Period", selection: $period) {
+                        ForEach(ReportPeriod.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                Section { heading(interval) }
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+                    .listRowInsets(EdgeInsets())
                 content(report, interval)
             }
             .navigationTitle("Reports")
@@ -63,62 +72,57 @@ struct ReportsTab: View {
         .sensoryFeedback(.selection, trigger: interval)
     }
 
-    // MARK: Header and toolbar
+    // MARK: Heading and toolbar
 
-    /// Period picker, then ‹ title and scope ›.
-    private func header(_ interval: DateInterval) -> some View {
-        VStack(spacing: 16) {
-            Picker("Period", selection: $period) {
-                ForEach(ReportPeriod.allCases) { Text($0.title).tag($0) }
+    /// ‹ the period's title, once, over the scope ›.
+    private func heading(_ interval: DateInterval) -> some View {
+        HStack(spacing: 0) {
+            stepButton(-1, interval)
+            VStack(spacing: 2) {
+                Text(title(interval))
+                    .font(Studio.Typography.title)
+                    .foregroundStyle(Studio.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                Text(scope.longTitle)
+                    .font(Studio.Typography.secondary)
+                    .foregroundStyle(Studio.textSecondary)
             }
-            .pickerStyle(.segmented)
-            HStack(spacing: 8) {
-                stepButton(-1, interval)
-                VStack(spacing: 4) {
-                    Text(title(interval))
-                        .font(.headline)
-                        .multilineTextAlignment(.center)
-                        .contentTransition(.numericText())
-                    Menu {
-                        Picker("Show", selection: $scope) {
-                            ForEach(ReportScope.allCases) { Label($0.longTitle, systemImage: $0.systemImage).tag($0) }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(scope.longTitle)
-                            Image(systemName: "chevron.up.chevron.down").imageScale(.small)
-                        }
-                        .font(.subheadline.weight(.medium))
-                    }
-                    .accessibilityLabel("Show \(scope.longTitle)")
-                    .accessibilityHint("Choose between your hours, AI agents and everyone")
-                }
-                .frame(maxWidth: .infinity)
-                stepButton(1, interval).disabled(interval.end > Date())
-            }
+            .frame(maxWidth: .infinity)
+            stepButton(1, interval).disabled(interval.end > Date())
         }
         .buttonStyle(.borderless)
     }
 
     private func stepButton(_ direction: Int, _ interval: DateInterval) -> some View {
         Button {
-            withAnimation(.snappy) {
-                anchor = tracker.calendar.date(byAdding: period.component, value: direction, to: interval.start) ?? anchor
-            }
+            anchor = tracker.calendar.date(byAdding: period.component, value: direction, to: interval.start) ?? anchor
         } label: {
-            Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
+            Label(direction < 0 ? "Previous \(period.rawValue)" : "Next \(period.rawValue)",
+                  systemImage: direction < 0 ? "chevron.left" : "chevron.right")
+                .labelStyle(.iconOnly)
                 .font(.body.weight(.semibold))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(direction < 0 ? "Previous \(period.rawValue)" : "Next \(period.rawValue)")
     }
 
     @ToolbarContentBuilder
     private func toolbar(_ report: Report?, _ interval: DateInterval) -> some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button("Today") { withAnimation(.snappy) { anchor = Date() } }
+            Button("Today") { anchor = Date() }
                 .disabled(interval.contains(Date()))
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Picker("Show", selection: $scope) {
+                    ForEach(ReportScope.allCases) { Label($0.longTitle, systemImage: $0.systemImage).tag($0) }
+                }
+            } label: {
+                Label("Show", systemImage: scope.systemImage)
+            }
+            .accessibilityValue(scope.longTitle)
+            .accessibilityHint("Your hours, AI agents, or everyone")
         }
         ToolbarItem(placement: .topBarTrailing) {
             if loading > 0, report != nil {
@@ -126,9 +130,10 @@ struct ReportsTab: View {
             } else {
                 let title = "\(title(interval)) · \(scope.longTitle)"
                 ShareLink(item: report.map { $0.summary(title: title, currency: currency($0)) } ?? "",
-                          subject: Text(title), preview: SharePreview(title))
-                    .disabled(report?.customers.isEmpty ?? true)
-                    .accessibilityLabel("Share summary")
+                          subject: Text(title), preview: SharePreview(title)) {
+                    Label("Share Summary", systemImage: "square.and.arrow.up")
+                }
+                .disabled(report?.customers.isEmpty ?? true)
             }
         }
     }
@@ -160,39 +165,47 @@ struct ReportsTab: View {
 
     @ViewBuilder private func content(_ report: Report?, _ interval: DateInterval) -> some View {
         if let report {
-            if ownOnly || failure != nil {
+            if (ownOnly && scope != .me) || failure != nil {
                 Section {
-                    if ownOnly {
-                        Label("Only your own entries: this API user may not list other users' timesheets.", systemImage: "info.circle")
+                    if ownOnly, scope != .me {
+                        Label {
+                            Text("Only your own entries: this API user may not see other users' timesheets.")
+                        } icon: {
+                            Image(systemName: "info.circle")
+                        }
+                        .foregroundStyle(Studio.textSecondary)
                     }
-                    if let failure {
-                        Label("Couldn't reload: \(failure)", systemImage: "exclamationmark.triangle")
-                    }
+                    // A reload failed but the cached report is still shown.
+                    if let failure { Problem("Couldn't reload: \(failure)") }
                 }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .font(Studio.Typography.secondary)
             }
             if report.customers.isEmpty {
                 Section {
-                    ContentUnavailableView("No Time Booked", systemImage: "clock",
-                                           description: Text(scope.emptyText(period)))
+                    ContentUnavailableView {
+                        Label { Text("No time booked").foregroundStyle(Studio.textPrimary) } icon: { Image(systemName: "clock") }
+                    } description: {
+                        Text(scope.emptyText(period)).foregroundStyle(Studio.textSecondary)
+                    }
                 }
             } else {
-                Section { KPIGrid(report: report, currency: currency(report), calendar: tracker.calendar) }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
                 Section {
                     ReportChart(report: report, calendar: tracker.calendar, color: color)
                 }
+                figures(report)
                 if !report.agents.isEmpty { agents(report) }
                 breakdown(report)
             }
         } else if let failure {
             Section {
                 ContentUnavailableView {
-                    Label("Couldn't Load the Report", systemImage: "exclamationmark.triangle")
+                    Label {
+                        Text("Couldn't load the report").foregroundStyle(Studio.textPrimary)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Studio.errorInk)
+                    }
                 } description: {
-                    Text(failure)
+                    Text(failure).foregroundStyle(Studio.textSecondary)
                 } actions: {
                     Button("Try Again") { Task { await load(interval, force: true) } }
                         .buttonStyle(.bordered)
@@ -200,7 +213,7 @@ struct ReportsTab: View {
             }
         } else {
             Section {
-                ProgressView("Loading…")
+                ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
             }
@@ -208,32 +221,57 @@ struct ReportsTab: View {
         }
     }
 
+    /// Billable share, revenue (when there is any) and entries, as rows: the
+    /// Mac's KPI tiles without the tiles. Total is over the chart.
+    private func figures(_ report: Report) -> some View {
+        let currency = currency(report)
+        let billableShare = report.totalSeconds > 0 ? Double(report.billableSeconds) / Double(report.totalSeconds) : 0
+        return Section {
+            FigureRow(title: "Billable", value: billableShare.formatted(.percent.precision(.fractionLength(0))),
+                      caption: DurationText.hours(report.billableSeconds))
+            if report.totalRevenue > 0 {
+                FigureRow(title: "Revenue", value: report.totalRevenue.formatted(.currency(code: currency).precision(.fractionLength(0))),
+                          caption: report.billableSeconds > 0
+                              ? "Ø " + (report.totalRevenue / (Double(report.billableSeconds) / 3600)).formatted(.currency(code: currency).precision(.fractionLength(0))) + " per billable hour"
+                              : nil)
+            }
+            FigureRow(title: "Entries", value: report.entryCount.formatted(),
+                      caption: report.customers.count == 1 ? "1 customer" : "\(report.customers.count) customers")
+        }
+    }
+
+    /// Neutral bars: agents are not customers.
     private func agents(_ report: Report) -> some View {
         let total = max(report.agents.values.reduce(0, +), 1)
         return Section {
             ForEach(report.agents.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }, id: \.key) { tag, seconds in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Studio.Space.s) {
                     HStack {
-                        Image(systemName: "sparkles").foregroundStyle(.purple).accessibilityHidden(true)
-                        Text(String(tag.dropFirst(3))).lineLimit(1)
+                        Label {
+                            Text(String(tag.dropFirst(3))).foregroundStyle(Studio.textPrimary).lineLimit(1)
+                        } icon: {
+                            Image(systemName: "sparkles").foregroundStyle(Studio.textSecondary)
+                        }
                         Spacer()
-                        Text(DurationText.hours(seconds)).monospacedDigit()
+                        Text(DurationText.hours(seconds)).monospacedDigit().foregroundStyle(Studio.textPrimary)
                     }
-                    ShareBar(share: Double(seconds) / Double(total), color: .purple)
+                    ShareBar(share: Double(seconds) / Double(total), color: Studio.controlBorder)
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
             }
         } header: {
-            Text("AI Agents")
+            Text("AI agents")
         } footer: {
             if report.scope == .all, report.totalSeconds > 0 {
                 Text("\((Double(total) / Double(report.totalSeconds)).formatted(.percent.precision(.fractionLength(0)))) of all hours")
+                    .foregroundStyle(Studio.textSecondary)
             }
         }
     }
 
-    /// Customer → project → activity, with hours, share and revenue.
+    /// Customer → project → activity, with hours, share and revenue: the Mac's
+    /// outline table as a native outline list.
     private func breakdown(_ report: Report) -> some View {
         let currency = currency(report)
         func row(_ line: ReportLine, depth: Int, color: Color) -> LineRow {
@@ -354,89 +392,37 @@ struct ReportsTab: View {
     }
 }
 
+
 // MARK: - Pieces
 
-/// Total, billable share, revenue (when there is any) and entries, two per row.
-private struct KPIGrid: View {
-    let report: Report
-    let currency: String
-    let calendar: Calendar
-    @Environment(\.dynamicTypeSize) private var typeSize
+/// One report figure: what it is (and a caption) leading, the value trailing.
+private struct FigureRow: View {
+    let title: String
+    let value: String
+    let caption: String?
 
     var body: some View {
-        let billableShare = report.totalSeconds > 0 ? Double(report.billableSeconds) / Double(report.totalSeconds) : 0
-        let activeDays = Set(report.buckets.map { calendar.startOfDay(for: $0.start) }).count
-        var cards = [
-            KPI(title: "Total", systemImage: "clock", value: DurationText.hours(report.totalSeconds),
-                caption: report.period == .week || report.period == .month
-                    ? "Ø \(DurationText.hours(report.totalSeconds / max(activeDays, 1))) on \(activeDays) day\(activeDays == 1 ? "" : "s")"
-                    : DurationText.short(report.totalSeconds) + " h:mm"),
-            KPI(title: "Billable", systemImage: "checkmark.seal", value: billableShare.formatted(.percent.precision(.fractionLength(0))),
-                caption: DurationText.hours(report.billableSeconds)),
-        ]
-        if report.totalRevenue > 0 {
-            cards.append(KPI(title: "Revenue", systemImage: "banknote",
-                             value: report.totalRevenue.formatted(.currency(code: currency).precision(.fractionLength(0))),
-                             caption: report.billableSeconds > 0
-                                 ? "Ø " + (report.totalRevenue / (Double(report.billableSeconds) / 3600)).formatted(.currency(code: currency).precision(.fractionLength(0))) + " per hour"
-                                 : " "))
-        }
-        cards.append(KPI(title: "Entries", systemImage: "list.bullet", value: report.entryCount.formatted(),
-                         caption: report.customers.count == 1 ? "1 customer" : "\(report.customers.count) customers"))
-        // Two per row; one at accessibility text sizes, where half a phone is too
-        // narrow. A lone last card (no revenue) takes the whole row.
-        let perRow = typeSize.isAccessibilitySize ? 1 : 2
-        let rows = stride(from: 0, to: cards.count, by: perRow).map { Array(cards[$0..<min($0 + perRow, cards.count)]) }
-        return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
-            ForEach(rows.indices, id: \.self) { row in
-                GridRow {
-                    ForEach(rows[row].indices, id: \.self) { column in
-                        rows[row][column].gridCellColumns(rows[row].count == 1 ? perRow : 1)
-                    }
+        HStack(alignment: .firstTextBaseline, spacing: Studio.Space.m) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundStyle(Studio.textPrimary)
+                if let caption {
+                    Text(caption).font(Studio.Typography.secondary).monospacedDigit().foregroundStyle(Studio.textSecondary)
                 }
             }
-        }
-    }
-}
-
-private struct KPI: View {
-    let title: String
-    let systemImage: String
-    let value: String
-    let caption: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                Image(systemName: systemImage).accessibilityHidden(true)
-                Text(title)
-            }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            Spacer(minLength: Studio.Space.s)
             Text(value)
-                .font(.title2.weight(.semibold))
-                .fontDesign(.rounded)
-                .monospacedDigit()
+                .font(Studio.Typography.figure)
+                .foregroundStyle(Studio.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(caption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Stacked bars per customer. Tap or drag across the bars to read one slot;
-/// the line above the chart shows its hours instead of the period's total.
+/// Total over the stacked bars per customer. Tap or drag across the bars to
+/// read one slot; the figure above shows its hours instead of the period's.
+/// Restrained as on the Mac: customer colours muted to 85 %, a hairline grid,
+/// and one accent, the axis label of the slot holding now.
 private struct ReportChart: View {
     let report: Report
     let calendar: Calendar
@@ -448,72 +434,119 @@ private struct ReportChart: View {
     var body: some View {
         let slot = selected.flatMap { calendar.dateInterval(of: unit, for: $0) }
         let slotSeconds = slot.map { s in report.buckets.filter { $0.start == s.start }.reduce(0) { $0 + $1.seconds } }
-        VStack(alignment: .leading, spacing: 12) {
+        let now = Date()
+        let currentSlot = report.interval.contains(now) ? calendar.dateInterval(of: unit, for: now)?.start : nil
+        VStack(alignment: .leading, spacing: Studio.Space.m) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(slot.map { slotTitle($0.start) } ?? "Hours")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
+                Text(slot.map { slotTitle($0.start) } ?? "Total")
+                    .font(Studio.Typography.secondary)
+                    .foregroundStyle(Studio.textSecondary)
                 Text(DurationText.hours(slotSeconds ?? report.totalSeconds))
-                    .font(.title3.weight(.semibold))
-                    .fontDesign(.rounded)
+                    .font(Studio.Typography.figure)
+                    .foregroundStyle(Studio.textPrimary)
+                // Kept in place while a slot is read, so the chart does not jump.
+                Text(caption)
+                    .font(Studio.Typography.secondary)
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .foregroundStyle(Studio.textSecondary)
+                    .opacity(slot == nil ? 1 : 0)
             }
             .accessibilityElement(children: .combine)
-            Chart {
-                ForEach(report.buckets) { bucket in
-                    BarMark(x: .value("Date", bucket.start, unit: unit),
-                            y: .value("Hours", Double(bucket.seconds) / 3600))
-                        .foregroundStyle(by: .value("Customer", bucket.customerName))
-                        .opacity(slot == nil || slot?.start == bucket.start ? 1 : 0.35)
-                }
+            Chart(report.buckets) { bucket in
+                BarMark(x: .value("Date", bucket.start, unit: unit),
+                        y: .value("Hours", Double(bucket.seconds) / 3600))
+                    .foregroundStyle(by: .value("Customer", bucket.customerName))
+                    .cornerRadius(2)
+                    .opacity(slot == nil || slot?.start == bucket.start ? 1 : 0.35)
             }
-            .chartForegroundStyleScale(domain: report.customers.map(\.name), range: report.customers.map { color($0.id) })
+            .chartForegroundStyleScale(domain: report.customers.map(\.name), range: report.customers.map { color($0.id).opacity(0.85) })
             .chartXScale(domain: report.interval.start...report.interval.end)
             .chartXAxis {
+                // A label (empty or not) on every slot: `centered` centres it up to the
+                // next mark that has one, so a skipped label would shift the others.
                 AxisMarks(values: .stride(by: unit)) { value in
-                    if let date = value.as(Date.self), showsLabel(date) {
-                        AxisValueLabel(format: format, centered: true)
+                    AxisValueLabel(centered: true) {
+                        if let date = value.as(Date.self) {
+                            let current = date == currentSlot
+                            if current || showsLabel(date, near: currentSlot) {
+                                Text(date, format: format)
+                                    .font(current ? Studio.Typography.numeral.weight(.semibold) : Studio.Typography.numeral)
+                                    .foregroundStyle(current ? Studio.accentInk : Studio.textSecondary)
+                            }
+                        }
                     }
                 }
             }
             .chartYAxis {
-                AxisMarks { value in
-                    AxisGridLine()
-                    AxisValueLabel { if let h = value.as(Double.self) { Text("\(h.formatted()) h") } }
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(Studio.lineSubtle)
+                    AxisValueLabel {
+                        if let h = value.as(Double.self) {
+                            Text("\(h.formatted()) h").font(Studio.Typography.numeral).foregroundStyle(Studio.textSecondary)
+                        }
+                    }
                 }
             }
-            .chartLegend(position: .bottom, alignment: .leading, spacing: 12)
+            // A legend that wraps eats the plot; the breakdown below has the same colour dots.
+            .chartLegend(report.customers.count > 8 ? .hidden : .visible)
+            .chartLegend(position: .top, alignment: .leading, spacing: Studio.Space.m) { legend }
             .chartXSelection(value: $selected)
             // Slots and labels in the Kimai user's time zone, as Report.build buckets them.
             .environment(\.calendar, calendar)
             .environment(\.timeZone, calendar.timeZone)
-            .frame(height: 240)
+            .frame(height: 220)
+            // Axis labels and legend grow only so far: at accessibility sizes they
+            // would crowd out the bars. The figures above and the breakdown below scale.
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             .accessibilityLabel("Hours per customer")
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, Studio.Space.s)
         .sensoryFeedback(.selection, trigger: slot?.start)
     }
 
-    /// One label per slot is too many on a phone for days (24) and months (31).
-    private func showsLabel(_ date: Date) -> Bool {
-        switch report.period {
+    /// "Ø 5.26 h on 5 days" for a week or month, else the total as h:mm.
+    private var caption: String {
+        let activeDays = Set(report.buckets.map { calendar.startOfDay(for: $0.start) }).count
+        return report.period == .week || report.period == .month
+            ? "Ø \(DurationText.hours(report.totalSeconds / max(activeDays, 1))) on \(activeDays) day\(activeDays == 1 ? "" : "s")"
+            : DurationText.short(report.totalSeconds) + " h:mm"
+    }
+
+    /// One "● Customer" pair after another, wrapping only between customers.
+    private var legend: some View {
+        let entries = report.customers.map { customer in
+            let dot = Text(Image(systemName: "circle.fill")).font(.system(size: 8)).foregroundStyle(color(customer.id).opacity(0.85))
+            return Text("\(dot)\u{00A0}\(customer.name.replacingOccurrences(of: " ", with: "\u{00A0}"))")
+        }
+        return entries.dropFirst().reduce(entries.first ?? Text("")) { Text("\($0)   \($1)") }
+            .font(Studio.Typography.numeral)
+            .foregroundStyle(Studio.textSecondary)
+            .accessibilityLabel("Customers: " + report.customers.map(\.name).joined(separator: ", "))
+    }
+
+    /// One label per slot is too many on a phone for hours (24) and days of a
+    /// month (31): every sixth hour, every seventh day, and none next to the
+    /// slot holding now, whose label is always shown.
+    private func showsLabel(_ date: Date, near current: Date?) -> Bool {
+        let regular = switch report.period {
         case .day: calendar.component(.hour, from: date) % 6 == 0
         case .month: (calendar.component(.day, from: date) - 1) % 7 == 0
         case .week, .year: true
         }
+        guard regular, report.period == .day || report.period == .month, let current else { return regular }
+        return abs(calendar.dateComponents([unit], from: current, to: date).value(for: unit) ?? 0) > 1
     }
 
     private var format: Date.FormatStyle {
         switch report.period {
-        case .day: .dateTime.hour()
+        case .day: .dateTime.hour(.twoDigits(amPM: .omitted))
         case .week: .dateTime.weekday(.abbreviated)
         case .month: .dateTime.day()
         case .year: .dateTime.month(.narrow)
         }
     }
 
-    /// "14:00–15:00", "Tue 6 Oct", "March".
+    /// "14:00–15:00", "Tue 6 Oct", "March 2026".
     private func slotTitle(_ start: Date) -> String {
         let style = Date.FormatStyle(locale: .current, calendar: calendar, timeZone: calendar.timeZone)
         switch report.period {
@@ -527,6 +560,7 @@ private struct ReportChart: View {
 }
 
 /// One breakdown line: name and hours, then its share of the total (and revenue).
+/// Customers medium with their colour dot, activities in secondary ink.
 private struct LineRow: View {
     let line: ReportLine
     let total: Int
@@ -536,36 +570,35 @@ private struct LineRow: View {
 
     var body: some View {
         let share = total > 0 ? Double(line.seconds) / Double(total) : 0
+        let ink = depth == 2 ? Studio.textSecondary : Studio.textPrimary
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: Studio.Space.s) {
                 if depth == 0 {
-                    Image(systemName: "circle.fill").font(.system(size: 10)).foregroundStyle(color).accessibilityHidden(true)
+                    Image(systemName: "circle.fill").font(.system(size: 9)).foregroundStyle(color).accessibilityHidden(true)
                 }
                 Text(line.name)
-                    .fontWeight(depth == 0 ? .semibold : .regular)
-                    .foregroundStyle(depth == 2 ? .secondary : .primary)
+                    .fontWeight(depth == 0 ? .medium : .regular)
                     .lineLimit(1)
-                Spacer(minLength: 8)
-                Text(DurationText.hours(line.seconds))
-                    .monospacedDigit()
-                    .foregroundStyle(depth == 2 ? .secondary : .primary)
+                Spacer(minLength: Studio.Space.s)
+                Text(DurationText.hours(line.seconds)).monospacedDigit()
             }
-            HStack(spacing: 8) {
+            .foregroundStyle(ink)
+            HStack(spacing: Studio.Space.s) {
                 ShareBar(share: share, color: color.opacity(depth == 0 ? 1 : 0.55))
                 Text(share.formatted(.percent.precision(.fractionLength(0))))
                 if line.revenue > 0 {
                     Text(line.revenue.formatted(.currency(code: currency).precision(.fractionLength(0))))
                 }
             }
-            .font(.caption)
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .font(Studio.Typography.numeral)
+            .foregroundStyle(Studio.textSecondary)
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
 }
 
+/// Track in `lineSubtle`, fill in the given colour.
 private struct ShareBar: View {
     let share: Double
     let color: Color
@@ -573,11 +606,11 @@ private struct ShareBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(.fill.tertiary)
-                Capsule().fill(color).frame(width: max(3, geo.size.width * min(max(share, 0), 1)))
+                Capsule().fill(Studio.lineSubtle)
+                Capsule().fill(color).frame(width: max(2, geo.size.width * min(max(share, 0), 1)))
             }
         }
-        .frame(height: 6)
+        .frame(height: 5)
         .accessibilityHidden(true)
     }
 }

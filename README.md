@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Branding/logo.svg" width="112" alt="Chronato logo: a C-shaped stopwatch with a tomato-red hand">
+  <img src="Branding/logo-1024.png" width="128" alt="Chronato app icon: a thick white ring cut into a C, with a tomato-red dot on the ring ahead of it, on a dark graphite tile">
 </p>
 
 <h1 align="center">Chronato</h1>
@@ -61,7 +61,7 @@ swift test                                      # ChronatoCore unit tests (stubb
 scripts/e2e.sh                                  # the real engine against a local mock Kimai (scripts/mock-kimai.py)
 swift run Chronato snapshot /tmp/chronato-ui    # every Mac UI surface as PNGs (light and dark) and the menu per state as text, fixture data
 scripts/build-app.sh                            # signed Apple-silicon app in dist/Chronato.app
-swift scripts/make-icon.swift Branding          # redraw the icons
+swift scripts/make-icon.swift Branding          # redraw the icons, SVGs and brand board (Branding/brand.md)
 ```
 
 - `Sources/ChronatoCore`: Kimai client, models, report maths, AI-agent sessions and the MCP server. Shared with the iPhone app.

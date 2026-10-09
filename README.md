@@ -59,7 +59,7 @@ Building the app needs Xcode 26 or later (the SwiftUI macros ship with Xcode, no
 swift build
 swift test                                      # ChronatoCore unit tests (stubbed URLSession, temp dirs)
 scripts/e2e.sh                                  # the real engine against a local mock Kimai (scripts/mock-kimai.py)
-swift run Chronato snapshot /tmp/chronato-ui    # every Mac UI surface as PNGs, light and dark, fixture data
+swift run Chronato snapshot /tmp/chronato-ui    # every Mac UI surface as PNGs (light and dark) and the menu per state as text, fixture data
 scripts/build-app.sh                            # signed Apple-silicon app in dist/Chronato.app
 swift scripts/make-icon.swift Branding          # redraw the icons
 ```

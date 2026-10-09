@@ -8,35 +8,98 @@ enum AppInfo {
     }
 }
 
+/// The status item, its menu, the panels and the windows are AppKit
+/// (MenuBarController, AppWindows), as in HoldFn and Meetfacts. SwiftUI has no
+/// public way to open its own scenes from an AppKit menu, so this App only
+/// provides the main menu: the Edit menu (⌘C, ⌘V in the panels) and, while a
+/// window makes Chronato a regular app, the app menu, whose Settings… opens the
+/// same window as the status menu's.
 struct ChronatoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var store = TrackerStore.shared
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuPanel().environment(store)
-        } label: {
-            MenuBarLabel().environment(store)
-        }
-        .menuBarExtraStyle(.window)
+        Settings { EmptyView() }
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings…") { AppWindows.shared.showSettings() }.keyboardShortcut(",")
+                }
+            }
+    }
+}
 
-        Settings {
-            SettingsView().environment(store)
-        }
+/// Reports and Settings: AppKit windows hosting the SwiftUI views (spec §7),
+/// opened from the menu. While one is open Chronato is a regular app (Dock
+/// tile, ⌘-Tab, its own menu bar); closing the last makes it an accessory again.
+@MainActor
+final class AppWindows: NSObject, NSWindowDelegate {
+    static let shared = AppWindows()
+    private var reports: NSWindow?
+    private var settings: NSWindow?
 
-        Window("Chronato Reports", id: "reports") {
-            ReportsView().environment(store)
-        }
-        .defaultSize(width: 880, height: 640)
+    func showReports() {
+        let window = reports ?? {
+            let window = makeWindow(ReportsView(), title: "Chronato Reports", resizable: true)
+            // The period title is in the content, once (§8).
+            window.titleVisibility = .hidden
+            window.setContentSize(NSSize(width: 960, height: 680))
+            window.contentMinSize = NSSize(width: 760, height: 540)
+            return autosaved(window, as: "Reports")
+        }()
+        reports = window
+        present(window)
+    }
+
+    /// `tab`: open on that tab (Connect to Kimai… → Connection).
+    func showSettings(tab: SettingsTab? = nil) {
+        if let tab { UserDefaults.standard.set(tab.rawValue, forKey: Prefs.settingsTab) }
+        let window = settings ?? autosaved(makeWindow(SettingsView(), title: "Settings", resizable: false), as: "Settings")
+        settings = window
+        present(window)
+    }
+
+    private func makeWindow(_ view: some View, title: String, resizable: Bool) -> NSWindow {
+        let host = NSHostingController(rootView: view.environment(TrackerStore.shared))
+        // A SwiftUI .toolbar becomes the window's NSToolbar; .navigationTitle its title.
+        host.sceneBridgingOptions = [.toolbars, .title]
+        // Resizable: never below the content's minimum. Else the default: the window fits the content.
+        if resizable { host.sizingOptions = [.minSize] }
+        let window = NSWindow(contentViewController: host)
+        window.styleMask = resizable ? [.titled, .closable, .miniaturizable, .resizable] : [.titled, .closable, .miniaturizable]
+        window.title = title
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        return window
+    }
+
+    /// The saved frame, else centred; saved from now on.
+    private func autosaved(_ window: NSWindow, as name: String) -> NSWindow {
+        if !window.setFrameUsingName(name) { window.center() }
+        window.setFrameAutosaveName(name)
+        return window
+    }
+
+    private func present(_ window: NSWindow) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        let closing = notification.object as? NSWindow
+        let stillOpen = [reports, settings].compactMap { $0 }.contains { $0 !== closing && ($0.isVisible || $0.isMiniaturized) }
+        if !stillOpen { NSApp.setActivationPolicy(.accessory) }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menuBar: MenuBarController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu-bar only, also when run straight from .build without Info.plist.
         NSApp.setActivationPolicy(.accessory)
         Prefs.register()
         AppearanceMode.follow()
+        menuBar = MenuBarController(store: .shared)
         // Synchronously, before launch completes: a notification action that launched the app reaches us.
         Notifications.shared.setUp()
         Task { @MainActor in await TrackerStore.shared.bootstrap() }

@@ -27,7 +27,7 @@ struct ChronatoApp: App {
         Window("Chronato Reports", id: "reports") {
             ReportsView().environment(store)
         }
-        .defaultSize(width: 880, height: 640)
+        .defaultSize(width: 960, height: 680)
     }
 }
 

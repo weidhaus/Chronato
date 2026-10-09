@@ -3,8 +3,12 @@ import Charts
 import ChronatoCore
 import SwiftUI
 
+/// The Reports window (design/chronato-interaction-spec.md §8): period and
+/// scope in the native toolbar, the period's title once in the content, then
+/// KPIs, a restrained chart and a native outline table on the Studio surface.
 struct ReportsView: View {
     @Environment(TrackerStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Snapshot/preview data instead of fetching from Kimai.
     var fixture: [KimaiTimesheet]? = nil
     @State var period: ReportPeriod = .month
@@ -26,19 +30,46 @@ struct ReportsView: View {
     @State private var copied = false
     /// Customers start expanded, projects collapsed; row ids in here are flipped.
     @State private var toggled: Set<String> = []
+    @State private var selection: String?
+    /// The content's width: the title grows from 1280 pt, the padding shrinks near the minimum.
+    @State private var width: CGFloat = 960
 
-    var body: some View {
-        let interval = Report.interval(for: period, containing: anchor, calendar: store.calendar)
-        let report = (fixture ?? cache[interval]).map {
+    /// The period on screen. Actions read it (and `report(_:)`) when they run: a toolbar
+    /// button's closure can outlive the body that made it, so captured values go stale.
+    private var shownInterval: DateInterval {
+        Report.interval(for: period, containing: anchor, calendar: store.calendar)
+    }
+
+    private func report(_ interval: DateInterval) -> Report? {
+        (fixture ?? cache[interval]).map {
             Report.build(entries: $0, interval: interval, period: period, scope: scope,
                          meId: store.me?.id ?? 0, agentTags: agentTags, calendar: store.calendar, now: store.now)
         }
-        VStack(spacing: 0) {
-            header(interval, report)
-            Divider()
-            content(report).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    var body: some View {
+        let interval = shownInterval
+        let report = report(interval)
+        let shown = "\(period.rawValue)-\(scope.rawValue)-\(interval.start.timeIntervalSince1970)"
+        VStack(alignment: .leading, spacing: 0) {
+            heading(interval, report)
+            // Period or scope changes crossfade the content; toolbar and title stay put.
+            ZStack {
+                content(report).id(shown).transition(.opacity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(reduceMotion ? nil : Studio.motion, value: shown)
         }
-        .frame(minWidth: 760, minHeight: 540)
+        // The window's minimum is 760 × 540 (spec §8); the toolbar takes about 52 of that.
+        .frame(minWidth: 760, minHeight: 488)
+        .background(Studio.surface)
+        .containerBackground(Studio.surface, for: .window)
+        .tint(Studio.accentInk)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .background { periodShortcuts }
+        .toolbar { toolbar(interval, report) }
+        // The period title is in the content, once; the window keeps its name for the Window menu and VoiceOver.
+        .toolbar(removing: .title)
         .task(id: interval) {
             failure = nil
             await load(interval)
@@ -58,61 +89,104 @@ struct ReportsView: View {
         }
     }
 
-    // MARK: Header
+    private var padding: CGFloat { width < 840 ? Studio.Space.l : Studio.Space.xl }
 
-    private func header(_ interval: DateInterval, _ report: Report?) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Picker("Period", selection: $period) {
-                    ForEach(ReportPeriod.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                Spacer()
-                if loading > 0 { ProgressView().controlSize(.small) }
-                Picker("Scope", selection: $scope) {
-                    ForEach(ReportScope.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("Me: your hours · AI: hours booked by AI agents · All: both")
-                Button { Task { await load(interval, force: true) } } label: { Image(systemName: "arrow.clockwise") }
-                    .help("Reload from Kimai")
-                    .disabled(loading > 0 || fixture != nil || store.isPreview)
-            }
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title(interval)).font(.title2.weight(.semibold))
-                    if ownOnly == true, scope != .me {
-                        Label("Only your own entries: this API user may not see other users' timesheets (view_other_timesheet).",
-                              systemImage: "info.circle")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    // A reload failed but the cached report is still shown.
-                    if let failure, report != nil {
-                        Label("Couldn't reload: \(failure)", systemImage: "exclamationmark.triangle")
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            .help(failure)
-                    }
-                }
-                Spacer()
-                ControlGroup {
-                    Button { step(-1, interval) } label: { Image(systemName: "chevron.left") }.help("Previous \(period.rawValue)")
-                    Button("Today") { anchor = Date() }
-                    Button { step(1, interval) } label: { Image(systemName: "chevron.right") }.help("Next \(period.rawValue)")
-                        .disabled(interval.end > Date())
-                }
-                .fixedSize()
-                Button { copy(report, interval) } label: {
-                    Label(copied ? "Copied" : "Copy Summary", systemImage: copied ? "checkmark" : "doc.on.doc")
-                }
-                .disabled(report?.customers.isEmpty ?? true)
+    // MARK: Toolbar
+
+    @ToolbarContentBuilder
+    private func toolbar(_ interval: DateInterval, _ report: Report?) -> some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            ControlGroup {
+                Button { step(-1) } label: { Label("Previous \(period.title)", systemImage: "chevron.left") }
+                    .keyboardShortcut(.leftArrow)
+                    .help("Previous \(period.rawValue)")
+                Button("Today") { anchor = Date() }
+                    .keyboardShortcut("t")
+                    .help("Go to the \(period.rawValue) containing today")
+                Button { step(1) } label: { Label("Next \(period.title)", systemImage: "chevron.right") }
+                    .keyboardShortcut(.rightArrow)
+                    .help("Next \(period.rawValue)")
+                    .disabled(interval.end > Date())
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        ToolbarItem(placement: .principal) {
+            Picker("Period", selection: $period) {
+                ForEach(ReportPeriod.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Picker("Scope", selection: $scope) {
+                ForEach(ReportScope.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .help("Me: your hours · AI: hours booked by AI agents · All: both")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            if loading > 0 {
+                ProgressView().controlSize(.small).help("Loading from Kimai")
+            } else {
+                Button { Task { await load(shownInterval, force: true) } } label: { Label("Reload", systemImage: "arrow.clockwise") }
+                    .keyboardShortcut("r")
+                    .help("Reload from Kimai")
+                    .disabled(fixture != nil || store.isPreview)
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: copy) {
+                Label(copied ? "Copied" : "Copy Summary", systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .help("Copy this report as text")
+            .disabled(report?.customers.isEmpty ?? true)
+        }
     }
 
-    private func step(_ direction: Int, _ interval: DateInterval) {
-        anchor = store.calendar.date(byAdding: period.component, value: direction, to: interval.start) ?? anchor
+    /// ⌘1–⌘4 choose the period, as in Calendar. A segmented control has no
+    /// per-segment shortcut, so hidden buttons carry them.
+    private var periodShortcuts: some View {
+        ForEach(Array(ReportPeriod.allCases.enumerated()), id: \.element) { index, period in
+            Button(period.title) { self.period = period }
+                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+        }
+        .hidden()
+    }
+
+    private func step(_ direction: Int) {
+        anchor = store.calendar.date(byAdding: period.component, value: direction, to: shownInterval.start) ?? anchor
+    }
+
+    // MARK: Heading
+
+    /// The period's title, the scope, and notices about this report.
+    private func heading(_ interval: DateInterval, _ report: Report?) -> some View {
+        VStack(alignment: .leading, spacing: Studio.Space.xs) {
+            Text(title(interval))
+                .font(width >= 1280 ? Studio.Typography.titleWide : Studio.Typography.title)
+                .foregroundStyle(Studio.textPrimary)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Text(scope.longTitle)
+                .foregroundStyle(Studio.textSecondary)
+            if ownOnly == true, scope != .me {
+                Label("Only your own entries: this API user may not see other users' timesheets (view_other_timesheet).",
+                      systemImage: "info.circle")
+                    .foregroundStyle(Studio.textSecondary)
+            }
+            // A reload failed but the cached report is still shown.
+            if let failure, report != nil {
+                Label("Couldn't reload: \(failure)", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Studio.errorInk)
+                    .lineLimit(1)
+                    .help(failure)
+            }
+        }
+        .font(Studio.Typography.secondary)
+        .padding(.horizontal, padding)
+        .padding(.top, padding)
+        .padding(.bottom, Studio.Space.l)
     }
 
     /// "Thursday, 8 October 2026", "Week 41 · 5–11 Oct 2026", "October 2026", "2026".
@@ -138,8 +212,9 @@ struct ReportsView: View {
         }
     }
 
-    private func copy(_ report: Report?, _ interval: DateInterval) {
-        guard let report else { return }
+    private func copy() {
+        let interval = shownInterval
+        guard let report = report(interval) else { return }
         let text = report.summary(title: "\(title(interval)) · \(scope.longTitle)", currency: currency(report))
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
@@ -155,25 +230,34 @@ struct ReportsView: View {
     @ViewBuilder private func content(_ report: Report?) -> some View {
         if let report {
             if report.customers.isEmpty {
-                ContentUnavailableView("No time booked", systemImage: "clock",
-                                       description: Text(scope.emptyText(period)))
+                // Titles in textPrimary: the system's grey is 3.9:1 on `surface`, under the 4.5 for window text.
+                ContentUnavailableView {
+                    Label { Text("No time booked").foregroundStyle(Studio.textPrimary) } icon: { Image(systemName: "clock") }
+                } description: {
+                    Text(scope.emptyText(period)).foregroundStyle(Studio.textSecondary)
+                }
             } else {
-                ReportBody(report: report, currency: currency(report), color: color, toggled: $toggled)
+                ReportBody(report: report, currency: currency(report), color: color, now: store.now, padding: padding,
+                           toggled: $toggled, selection: $selection)
             }
         } else if let failure {
             ContentUnavailableView {
-                Label("Couldn't load the report", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(failure)
-            } actions: {
-                Button("Try Again") {
-                    let interval = Report.interval(for: period, containing: anchor, calendar: store.calendar)
-                    Task { await load(interval, force: true) }
+                Label {
+                    Text("Couldn't load the report").foregroundStyle(Studio.textPrimary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Studio.errorInk)
                 }
+            } description: {
+                Text(failure).foregroundStyle(Studio.textSecondary)
+            } actions: {
+                Button("Try Again") { Task { await load(shownInterval, force: true) } }
             }
         } else if store.client == nil, !store.isPreview {
-            ContentUnavailableView("Not connected", systemImage: "bolt.horizontal.circle",
-                                   description: Text("Connect to Kimai under Settings → Connection."))
+            ContentUnavailableView {
+                Label { Text("Not connected").foregroundStyle(Studio.textPrimary) } icon: { Image(systemName: "bolt.horizontal.circle") }
+            } description: {
+                Text("Connect to Kimai under Settings → Connection.").foregroundStyle(Studio.textSecondary)
+            }
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -292,20 +376,25 @@ private struct ReportBody: View {
     let report: Report
     let currency: String
     let color: (Int) -> Color
+    /// Marks the chart's current bucket.
+    let now: Date
+    let padding: CGFloat
     @Binding var toggled: Set<String>
+    @Binding var selection: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Studio.Space.l) {
             kpis
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: Studio.Space.l) {
                 chart
                 if !report.agents.isEmpty { agents }
             }
-            .frame(height: 190)
+            .frame(height: 200)
+            .padding(.bottom, Studio.Space.s)
             breakdown
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, padding)
     }
 
     // MARK: KPIs
@@ -313,7 +402,7 @@ private struct ReportBody: View {
     private var kpis: some View {
         let billableShare = report.totalSeconds > 0 ? Double(report.billableSeconds) / Double(report.totalSeconds) : 0
         let activeDays = Set(report.buckets.map(\.start)).count
-        return HStack(spacing: 12) {
+        return HStack(spacing: Studio.Space.m) {
             KPI(title: "Total", value: DurationText.hours(report.totalSeconds),
                 caption: report.period == .week || report.period == .month
                     ? "Ø \(DurationText.hours(report.totalSeconds / max(activeDays, 1))) on \(activeDays) day\(activeDays == 1 ? "" : "s")"
@@ -332,6 +421,8 @@ private struct ReportBody: View {
 
     // MARK: Chart
 
+    /// Customer colours muted to 85 %, hairline horizontal grid, no other decoration.
+    /// The only accent is the axis label of the bucket holding now.
     private var chart: some View {
         // One centred label per bar slot, so a label never sits between two bars.
         let format: Date.FormatStyle = switch report.period {
@@ -340,152 +431,195 @@ private struct ReportBody: View {
         case .month: .dateTime.day()
         case .year: .dateTime.month(.abbreviated)
         }
+        let unit = report.period.bucketComponent
         return Chart(report.buckets) { bucket in
-            BarMark(x: .value("Date", bucket.start, unit: report.period.bucketComponent),
+            BarMark(x: .value("Date", bucket.start, unit: unit),
                     y: .value("Hours", Double(bucket.seconds) / 3600))
                 .foregroundStyle(by: .value("Customer", bucket.customerName))
+                .cornerRadius(2)
         }
-        .chartForegroundStyleScale(domain: report.customers.map(\.name), range: report.customers.map { color($0.id) })
+        .chartForegroundStyleScale(domain: report.customers.map(\.name), range: report.customers.map { color($0.id).opacity(0.85) })
         .chartXScale(domain: report.interval.start...report.interval.end)
         .chartXAxis {
-            AxisMarks(values: .stride(by: report.period.bucketComponent)) { _ in
-                AxisValueLabel(format: format, centered: true)
+            AxisMarks(values: .stride(by: unit)) { value in
+                AxisValueLabel(centered: true) {
+                    if let date = value.as(Date.self) {
+                        // The axis is laid out in the system calendar, so the label is matched in it too.
+                        let current = Calendar.current.isDate(date, equalTo: now, toGranularity: unit)
+                        Text(date, format: format)
+                            .font(current ? Studio.Typography.numeral.weight(.semibold) : Studio.Typography.numeral)
+                            .foregroundStyle(current ? Studio.accentInk : Studio.textSecondary)
+                    }
+                }
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading) { value in
-                AxisGridLine()
-                AxisValueLabel { if let h = value.as(Double.self) { Text("\(h.formatted()) h") } }
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(Studio.lineSubtle)
+                AxisValueLabel {
+                    if let h = value.as(Double.self) {
+                        Text("\(h.formatted()) h").font(Studio.Typography.numeral).foregroundStyle(Studio.textSecondary)
+                    }
+                }
             }
         }
-        .chartLegend(position: .top, alignment: .leading, spacing: 10)
         // A legend that wraps eats the plot's fixed height; the breakdown below has the same colour dots.
-        .chartLegend(report.customers.count > 8 ? .hidden : .automatic)
+        .chartLegend(report.customers.count > 8 ? .hidden : .visible)
+        .chartLegend(position: .top, alignment: .leading, spacing: Studio.Space.m) { legend }
+    }
+
+    /// One wrapping line of "● Customer" pairs. Non-breaking spaces keep a dot with its
+    /// name, so a line only breaks between customers.
+    private var legend: some View {
+        let entries = report.customers.map { customer in
+            let dot = Text(Image(systemName: "circle.fill")).font(.system(size: 8)).foregroundStyle(color(customer.id).opacity(0.85))
+            return Text("\(dot)\u{00A0}\(customer.name.replacingOccurrences(of: " ", with: "\u{00A0}"))")
+        }
+        return entries.dropFirst().reduce(entries.first ?? Text("")) { Text("\($0)    \($1)") }
+            .font(Studio.Typography.secondary)
+            .foregroundStyle(Studio.textSecondary)
+            .accessibilityLabel("Customers: " + report.customers.map(\.name).joined(separator: ", "))
     }
 
     // MARK: AI agents
 
     private var agents: some View {
         let total = max(report.agents.values.reduce(0, +), 1)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("AI agents").font(.headline)
+        return VStack(alignment: .leading, spacing: Studio.Space.s) {
+            Text("AI agents")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Studio.textSecondary)
             ForEach(report.agents.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }, id: \.key) { tag, seconds in
                 HStack {
                     Label(String(tag.dropFirst(3)), systemImage: "sparkles").lineLimit(1)
                     Spacer()
                     Text(DurationText.hours(seconds)).monospacedDigit()
                 }
-                ShareBar(share: Double(seconds) / Double(total), color: .purple)
+                .foregroundStyle(Studio.textPrimary)
+                // Neutral: agents are not customers.
+                ShareBar(share: Double(seconds) / Double(total), color: Studio.controlBorder)
             }
             Spacer(minLength: 0)
             if report.scope == .all, report.totalSeconds > 0 {
                 Text("\((Double(total) / Double(report.totalSeconds)).formatted(.percent.precision(.fractionLength(0)))) of all hours")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(Studio.Typography.secondary)
+                    .foregroundStyle(Studio.textSecondary)
             }
         }
-        .padding(12)
-        .frame(width: 220)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .font(Studio.Typography.body)
+        .padding(.vertical, Studio.Space.m)
+        .padding(.horizontal, 14)
+        .frame(width: 220, alignment: .leading)
+        .frame(maxHeight: .infinity)
+        .modifier(Tile())
     }
 
     // MARK: Breakdown
 
+    /// A native outline table: ↑/↓ move, ←/→ collapse and expand.
     private var breakdown: some View {
-        let showRevenue = report.totalRevenue > 0
-        return VStack(spacing: 0) {
-            Columns(showRevenue: showRevenue) {
-                Text("Customer / Project / Activity")
-            } share: {
-                Text("Share")
-            } hours: {
-                Text("Hours")
-            } revenue: {
-                Text("Revenue")
+        Table(of: Row.self, selection: $selection) {
+            TableColumn("Customer / Project / Activity") { row in
+                HStack(spacing: 6) {
+                    if row.depth == 0 {
+                        Circle().fill(color(row.customerId)).frame(width: 8, height: 8)
+                    }
+                    Text(row.line.name)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .fontWeight(row.depth == 0 ? .medium : .regular)
+                        .modifier(Ink(secondary: row.depth == 2))
+                }
             }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 6)
-            Divider()
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(report.customers) { customer in
-                        rows(customer, path: "c\(customer.id)", depth: 0, color: color(customer.id), showRevenue: showRevenue)
-                        Divider()
+            TableColumn("Share") { row in
+                let share = report.totalSeconds > 0 ? Double(row.line.seconds) / Double(report.totalSeconds) : 0
+                HStack(spacing: Studio.Space.s) {
+                    ShareBar(share: share, color: color(row.customerId).opacity(row.depth == 0 ? 1 : 0.55))
+                    Text(share.formatted(.percent.precision(.fractionLength(0))))
+                        .frame(width: 40, alignment: .trailing)
+                        .modifier(Ink())
+                }
+            }
+            .width(150)
+            TableColumn("Hours") { row in
+                Text(DurationText.hours(row.line.seconds)).modifier(Ink())
+            }
+            .width(72)
+            .alignment(.trailing)
+            if report.totalRevenue > 0 {
+                TableColumn("Revenue") { row in
+                    Text(row.line.revenue > 0 ? row.line.revenue.formatted(.currency(code: currency)) : "–")
+                        .modifier(Ink(secondary: row.line.revenue == 0))
+                }
+                .width(100)
+                .alignment(.trailing)
+            }
+        } rows: {
+            ForEach(report.customers) { customer in
+                let c = Row(id: "c\(customer.id)", line: customer, depth: 0, customerId: customer.id)
+                DisclosureTableRow(c, isExpanded: expanded(c)) {
+                    ForEach(customer.children) { project in
+                        let p = Row(id: "\(c.id)/\(project.id)", line: project, depth: 1, customerId: customer.id)
+                        DisclosureTableRow(p, isExpanded: expanded(p)) {
+                            ForEach(project.children) { activity in
+                                TableRow(Row(id: "\(p.id)/\(activity.id)", line: activity, depth: 2, customerId: customer.id))
+                            }
+                        }
                     }
                 }
-                .padding(.bottom, 16)
             }
         }
+        .monospacedDigit()
+        .tableStyle(.inset)
+        .alternatingRowBackgrounds(.disabled)
+        .scrollContentBackground(.hidden)
     }
 
-    /// A line and, when expanded, its children (AnyView because it recurses).
-    private func rows(_ line: ReportLine, path: String, depth: Int, color: Color, showRevenue: Bool) -> AnyView {
-        let expanded = (depth == 0) != toggled.contains(path)
-        let share = report.totalSeconds > 0 ? Double(line.seconds) / Double(report.totalSeconds) : 0
-        func toggle() {
-            guard !line.children.isEmpty else { return }
-            withAnimation(.snappy(duration: 0.2)) {
-                if toggled.contains(path) { toggled.remove(path) } else { toggled.insert(path) }
+    /// Customers start expanded and projects collapsed; `toggled` holds the rows flipped from that.
+    private func expanded(_ row: Row) -> Binding<Bool> {
+        Binding {
+            (row.depth == 0) != toggled.contains(row.id)
+        } set: { open in
+            withAnimation(reduceMotion ? nil : Studio.motion) {
+                if open == (row.depth == 0) { toggled.remove(row.id) } else { toggled.insert(row.id) }
             }
         }
-        return AnyView(VStack(spacing: 0) {
-            Columns(showRevenue: showRevenue) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(expanded ? 90 : 0))
-                        .opacity(line.children.isEmpty ? 0 : 1)
-                        .frame(width: 10)
-                    if depth == 0 { Circle().fill(color).frame(width: 8, height: 8) }
-                    Text(line.name).lineLimit(1).truncationMode(.tail)
-                        .fontWeight(depth == 0 ? .medium : .regular)
-                        .foregroundStyle(depth == 2 ? .secondary : .primary)
-                }
-                .padding(.leading, CGFloat(depth) * 20)
-            } share: {
-                HStack(spacing: 8) {
-                    ShareBar(share: share, color: color.opacity(depth == 0 ? 1 : 0.55))
-                    Text(share.formatted(.percent.precision(.fractionLength(0)))).frame(width: 40, alignment: .trailing)
-                }
-            } hours: {
-                Text(DurationText.hours(line.seconds))
-            } revenue: {
-                Text(line.revenue > 0 ? line.revenue.formatted(.currency(code: currency)) : "–")
-                    .foregroundStyle(line.revenue > 0 ? .primary : .tertiary)
-            }
-            .monospacedDigit()
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: toggle)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(line.children.isEmpty ? [] : .isButton)
-            .accessibilityValue(line.children.isEmpty ? "" : expanded ? "expanded" : "collapsed")
-            .accessibilityAction { toggle() }
-            if expanded {
-                ForEach(line.children) { child in
-                    rows(child, path: "\(path)/\(child.id)", depth: depth + 1, color: color, showRevenue: showRevenue)
-                }
-            }
-        })
     }
 }
 
-/// One breakdown row's column layout, shared by header and rows so numbers line up.
-private struct Columns<Name: View, Share: View, Hours: View, Revenue: View>: View {
-    let showRevenue: Bool
-    @ViewBuilder let name: Name
-    @ViewBuilder let share: Share
-    @ViewBuilder let hours: Hours
-    @ViewBuilder let revenue: Revenue
+/// A breakdown line with an id unique across levels ("c10/12/3"); ReportLine ids
+/// are Kimai ids and repeat between customers, projects and activities.
+private struct Row: Identifiable {
+    let id: String
+    let line: ReportLine
+    let depth: Int
+    let customerId: Int
+}
 
-    var body: some View {
-        HStack(spacing: 16) {
-            name.frame(maxWidth: .infinity, alignment: .leading)
-            share.frame(width: 150, alignment: .trailing)
-            hours.frame(width: 72, alignment: .trailing)
-            if showRevenue { revenue.frame(width: 100, alignment: .trailing) }
-        }
+/// Studio ink, except in a selected row: there the system's selection colours take
+/// over (macOS ignores the tint for selection; dark ink on it would not read).
+private struct Ink: ViewModifier {
+    var secondary = false
+    @Environment(\.backgroundProminence) private var prominence
+
+    func body(content: Content) -> some View {
+        content.foregroundStyle(prominence == .increased
+            ? AnyShapeStyle(secondary ? HierarchicalShapeStyle.secondary : .primary)
+            : AnyShapeStyle(secondary ? Studio.textSecondary : Studio.textPrimary))
+    }
+}
+
+/// `raised` with a hairline border, stronger with Increase Contrast.
+private struct Tile: ViewModifier {
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content
+            .background(Studio.raised, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(contrast == .increased ? Studio.controlBorder : Studio.lineSubtle, lineWidth: 0.5)
+            }
     }
 }
 
@@ -496,7 +630,7 @@ private struct ShareBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(.fill.tertiary)
+                Capsule().fill(Studio.lineSubtle)
                 Capsule().fill(color).frame(width: max(2, geo.size.width * min(max(share, 0), 1)))
             }
         }
@@ -510,15 +644,25 @@ private struct KPI: View {
     let caption: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-            Text(value).font(.title2.weight(.semibold)).monospacedDigit().lineLimit(1)
-            Text(caption).font(.caption).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(Studio.Typography.secondary)
+                .foregroundStyle(Studio.textSecondary)
+            Text(value)
+                .font(Studio.Typography.figure)
+                .foregroundStyle(Studio.textPrimary)
+                .lineLimit(1)
+            Text(caption)
+                .font(Studio.Typography.secondary)
+                .monospacedDigit()
+                .foregroundStyle(Studio.textSecondary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, Studio.Space.m)
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .modifier(Tile())
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -6,7 +6,8 @@
 #   scripts/build-app.sh              build and sign
 #   scripts/build-app.sh --notarize   … then notarize, staple, and write
 #                                     dist/Chronato-<version>.zip and .dmg
-#   scripts/build-app.sh --install    … then replace /Applications/Chronato.app
+#   scripts/build-app.sh --install    … then replace Chronato.app in /Applications,
+#                                     or in ~/Applications for a non-admin account
 #
 # CHRONATO_VERSION=1.2.0 sets the version instead of the nearest git tag
 # (scripts/release.sh does this). Sparkle.framework is embedded and re-signed.
@@ -200,7 +201,13 @@ fi
 # 5. Install -----------------------------------------------------------------
 
 if (( INSTALL )); then
+    # A standard (non-admin) account cannot write /Applications; ~/Applications
+    # is its own, and Sparkle can update there without asking for a password.
     TARGET="/Applications/$NAME.app"
+    if [[ ! -w /Applications ]] || [[ -d "$HOME/Applications/$NAME.app" && ! -d "$TARGET" ]]; then
+        mkdir -p "$HOME/Applications"
+        TARGET="$HOME/Applications/$NAME.app"
+    fi
     # Match the whole command line so only the menu-bar app quits, not the
     # `Chronato mcp` servers AI agents are talking to (same process name).
     if pgrep -fx ".*/$NAME" >/dev/null; then

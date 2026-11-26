@@ -24,6 +24,7 @@ final class NewTimerPanel: NSObject, NSWindowDelegate {
         let model = NewTimerModel(store, last: (defaults.integer(forKey: Prefs.lastProjectId), defaults.integer(forKey: Prefs.lastActivityId)))
         self.model = model
         let host = NSHostingController(rootView: NewTimerForm(model: model, start: { [weak self] in self?.start() },
+                                                              add: { [weak self] in self?.add() },
                                                               cancel: { [weak self] in self?.close() }).environment(store))
         host.sizingOptions = [.minSize] // resizable: the user's size, never below the content's minimum
         if let panel {
@@ -47,12 +48,25 @@ final class NewTimerPanel: NSObject, NSWindowDelegate {
     }
 
     private func start() {
+        submit { store, combo, note in await store.start(projectId: combo.project.id, activityId: combo.activity.id, description: note) }
+    }
+
+    /// Quick Add: the selected row's time, `minutes` ending now, without touching the timer.
+    private func add() {
+        guard let minutes = model?.minutes else { return }
+        submit { store, combo, note in
+            await store.addTime(minutes: minutes, projectId: combo.project.id, activityId: combo.activity.id, description: note)
+        }
+    }
+
+    /// Start or Add with the selected row and the note: success closes the panel.
+    private func submit(_ action: @escaping @MainActor (TrackerStore, Combo, String?) async -> Error?) {
         guard let model, let combo = model.current, !model.starting, store.connectionState == .online, !store.isBusy else { return }
         model.starting = true
         model.error = nil
         let note = model.note.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
-            let error = await store.start(projectId: combo.project.id, activityId: combo.activity.id, description: note.isEmpty ? nil : note)
+            let error = await action(store, combo, note.isEmpty ? nil : note)
             model.starting = false
             guard let error else { return close() }
             model.error = error.localizedDescription
@@ -86,10 +100,18 @@ final class NewTimerModel {
     let combos: [Combo]
     var query = ""
     var note = ""
+    /// Quick Add's duration as typed.
+    var minutesText = "15"
     /// nil: the first result.
     var selection: Combo.ID?
     var error: String?
+    /// Start or Add in flight.
     var starting = false
+
+    /// Whole minutes from 1 to a day (the 24 h cap), else nil: Add is disabled.
+    var minutes: Int? {
+        Int(minutesText.trimmingCharacters(in: .whitespaces)).flatMap { (1...1440).contains($0) ? $0 : nil }
+    }
 
     init(_ store: TrackerStore, last: (project: Int, activity: Int)) {
         let (recent, others) = store.startableCustomers
@@ -132,6 +154,7 @@ struct NewTimerForm: View {
     @Environment(\.colorSchemeContrast) private var contrast
     @Bindable var model: NewTimerModel
     var start: () -> Void = {}
+    var add: () -> Void = {}
     var cancel: () -> Void = {}
     @FocusState private var noteFocused: Bool
 
@@ -183,8 +206,19 @@ struct NewTimerForm: View {
                 Text("Kimai is not reachable").font(Studio.Typography.secondary).foregroundStyle(Studio.textSecondary)
             }
             HStack {
+                TextField("15", text: $model.minutesText)
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 44)
+                    .onSubmit(add)
+                    .accessibilityLabel("Minutes to add")
+                Text("min").font(Studio.Typography.secondary).foregroundStyle(Studio.textSecondary).accessibilityHidden(true)
                 Spacer()
                 Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
+                Button("Add \(model.minutes.map(String.init) ?? "–") min", action: add)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help("Books this time ending now (⌘↩). A running timer keeps running.")
+                    .disabled(current == nil || model.minutes == nil || model.starting || store.isBusy || store.connectionState != .online)
                 Button(store.isRunning ? "Switch" : "Start", action: start)
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)

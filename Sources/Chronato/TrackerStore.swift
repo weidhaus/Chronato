@@ -566,10 +566,29 @@ final class TrackerStore {
     func start(projectId: Int, activityId: Int, description: String?) async -> Error? {
         await perform { client in
             try await startEntry(NewTimesheet(project: projectId, activity: activityId, description: Self.note(description)), client)
-            defaults.set(project(projectId)?.customer ?? active?.customerId, forKey: Prefs.lastCustomerId)
-            defaults.set(projectId, forKey: Prefs.lastProjectId)
-            defaults.set(activityId, forKey: Prefs.lastActivityId)
+            rememberChoice(projectId: projectId, activityId: activityId)
         }
+    }
+
+    /// Quick Add: books a finished entry of `minutes` that ends now. A running timer keeps
+    /// running (Kimai stops other entries only for a new running one). Whole minutes,
+    /// because Kimai floors begin and ceils end to the minute: 10:07:23–10:22:23 would
+    /// be saved as 16 minutes.
+    @discardableResult
+    func addTime(minutes: Int, projectId: Int, activityId: Int, description: String?) async -> Error? {
+        await perform { client in
+            let end = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 / 60).rounded(.down) * 60)
+            _ = try await client.create(NewTimesheet(project: projectId, activity: activityId, begin: end - Double(minutes * 60),
+                                                     end: end, description: Self.note(description)))
+            rememberChoice(projectId: projectId, activityId: activityId)
+        }
+    }
+
+    /// The New Timer panel lists this choice first next time.
+    private func rememberChoice(projectId: Int, activityId: Int) {
+        defaults.set(project(projectId)?.customer ?? active?.customerId, forKey: Prefs.lastCustomerId)
+        defaults.set(projectId, forKey: Prefs.lastProjectId)
+        defaults.set(activityId, forKey: Prefs.lastActivityId)
     }
 
     @discardableResult

@@ -13,6 +13,7 @@
 - **Start, pause, stop** from a native menu-bar menu: **Start ▸** customer ▸ project ▸ activity, or **New Timer…** (⌘N) to search every combination and add a note up front. Pause ⌘P, Stop ⌘S, Add Note… ⌘E.
 - **Live time in the menu bar**, optionally with the customer name.
 - **Recent activities**: start an earlier customer/project/activity/note again with one click.
+- **Quick Add**: book time you already worked, e.g. 15 minutes for customer X on activity Y, ending now, from the New Timer panel (⌘N): pick the row, type the minutes, Add (⌘↩). A running timer keeps running.
 - **Server sync**: a timer started in the Kimai web UI, on the iPhone or on another Mac shows up in Chronato, and the other way round.
 - **Idle auto-pause**: after a set time without keyboard or mouse input (default 10 minutes) the timer stops at the moment you left. When you come back, choose to resume, count the away time (more than 4 h only after a confirmation), stay paused, or stop. Sleep is handled the same way, and so is the time Chronato was not running: quitting with a running timer asks first.
 - **24 h auto-stop**: any timer, yours or an AI agent's, that runs for 24 hours is stopped at the last activity.

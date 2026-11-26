@@ -261,12 +261,13 @@ Opened by **Add Note… / Edit Note…** (⌘E) while running or paused (manual)
 
 Opened by **New Timer…** (⌘N), also while a timer runs (it then switches). Same panel kind and position rule as §5, title "New Timer", 440 × 400 pt, minimum 400 × 320, resizable, frame autosaved.
 
-- **Content, top to bottom:** a search field, focused, placeholder "Search customers, projects and activities"; the result list; a note field, placeholder "Note (optional)"; the error line when starting failed; **Cancel** and **Start** (default; titled **Switch** while a timer runs).
+- **Content, top to bottom:** a search field, focused, placeholder "Search customers, projects and activities"; the result list; a note field, placeholder "Note (optional)"; the error line when starting or adding failed; a minutes field (default 15) with "min", then **Cancel**, **Add 15 min** (⌘↩, titled with the typed minutes) and **Start** (default; titled **Switch** while a timer runs).
 - **Results:** every startable combination as one row: customer dot, "Activity" (13, `textPrimary`), below it "Customer › Project" (12, `textSecondary`).
 - **Order:** the last choice (`Prefs.lastCustomerId`, `lastProjectId`, `lastActivityId`) first, then the combinations of Recent customers in recency order, then the rest by customer, project and activity name.
 - **Search:** case- and diacritic-insensitive; every whitespace-separated term must appear in the customer, project or activity name (`localizedStandardContains`); same order. "nor auto" finds Northwind Traders › Ops Dashboard › Automation. No match: "No match for “…”" (12, `textSecondary`) in the list, Start disabled.
 - **Keyboard first:** the first row is selected; ↑/↓ in the search field move the selection; Tab goes to the note field; Return in either field starts the selected row; Esc cancels; double-clicking a row starts it.
 - **Start** calls `store.start(projectId:activityId:description:)`, which also stores the last choice. Success closes the panel. Failure keeps it open with query, selection and note, and shows the error.
+- **Quick Add:** **Add** books a finished entry of the selected row, the note and the minutes, ending now (`store.addTime(minutes:projectId:activityId:description:)`, whole minutes so Kimai's rounding keeps the duration). The running timer is not touched. Return in the minutes field adds; ⌘↩ adds from any field. Minutes outside 1–1440 disable Add. Success and failure as for Start.
 - Offline or busy: Start disabled, with "Kimai is not reachable" or nothing respectively. The query is not remembered between openings; the last choice is.
 
 ## 7. Windows and activation

@@ -72,6 +72,7 @@ final class SelfTest {
         await scenario("p. menu and reports", menuAndReports)
         await scenario("q. Kimai time zone changed while running", timeZoneChange)
         await scenario("r. Kimai tracking mode without written times", trackingMode)
+        await scenario("s. quick add", quickAdd)
     }
 
     // MARK: Scenarios
@@ -914,6 +915,37 @@ final class SelfTest {
         try await post("__config")
         check("r.punchMode.idlePauseEndsNow", within(ended?.end, now - 61, Date() + 61) && store.active == nil && store.paused?.reason == .idle,
               "end=\(t(ended?.end)) paused=\(String(describing: store.paused)) lastError=\(store.lastError ?? "nil")")
+    }
+
+    /// Quick Add books finished time ending now (whole minutes, so Kimai's rounding keeps
+    /// the duration) and leaves the running timer alone.
+    func quickAdd() async throws {
+        let store = try await freshStore()
+        await store.start(projectId: 12, activityId: 3, description: "Keeps running")
+        guard let runner = store.active?.id else { return check("s.setup", false, "nothing started: \(store.lastError ?? "")") }
+        let before = Set(try await entries().map(\.id))
+        let t0 = Date()
+        let failed = await store.addTime(minutes: 15, projectId: 9, activityId: 1, description: "  Call with Kunde X ")
+        let added = try await entries().filter { !before.contains($0.id) }
+        check("s.oneFinishedEntry", failed == nil && added.count == 1 && added.first?.end != nil,
+              "added=\(added.map(show)) returned=\(failed?.localizedDescription ?? "nil")")
+        guard let a = added.first else { return }
+        check("s.fields", a.project == 9 && a.activity == 1 && a.description == "Call with Kunde X", show(a))
+        check("s.exactly15MinEndingNow", a.duration == 900 && within(a.end, t0 - 61, Date() + 1)
+              && a.end.map { $0.timeIntervalSince(a.begin) } == 900, "\(show(a)) duration=\(a.duration)")
+        let run = try await running()
+        check("s.timerKeepsRunning", run.map(\.id) == [runner] && store.active?.id == runner && store.lastError == nil,
+              "running=\(run.map(show)) active=\(show(store.active)) lastError=\(store.lastError ?? "nil")")
+        check("s.lastChoiceRemembered", defaults.integer(forKey: Prefs.lastProjectId) == 9 && defaults.integer(forKey: Prefs.lastActivityId) == 1,
+              "project=\(defaults.integer(forKey: Prefs.lastProjectId)) activity=\(defaults.integer(forKey: Prefs.lastActivityId))")
+        try await checkTotals("s", store)
+        // The form's minutes: whole minutes from 1 to a day, else Add is disabled.
+        let form = NewTimerModel(store, last: (project: 9, activity: 1))
+        let parsed = ["15", " 90 ", "0", "-5", "1441", "1440", "abc", ""].map { text -> Int? in
+            form.minutesText = text
+            return form.minutes
+        }
+        check("s.minutesField", parsed == [15, 90, nil, nil, nil, 1440, nil, nil], "\(parsed)")
     }
 
     // MARK: Store and mock plumbing
